@@ -36,6 +36,7 @@ def page_wrapper(title: str):
     """Apply shared page-level styles and title."""
     ui.query("body").style(f"background:{BG}; font-family:'Inter',sans-serif; margin:0;")
     ui.html(f"<title>{title}</title>")
+    ui.html('<meta name="viewport" content="width=device-width, initial-scale=1.0">')
 
 
 def nav_bar(username: str, role: str):
@@ -82,13 +83,14 @@ def setup_login_page():
         page_wrapper("WorkHours – Login")
 
         with ui.column().classes("items-center justify-center").style(
-            f"min-height:100vh; background:linear-gradient(135deg,{BRAND_BLUE} 0%,#2563EB 100%);"
-        ):
+            f"min-height:100vh; width:100vw; padding:24px; box-sizing:border-box;"
+            f"background:linear-gradient(135deg,{BRAND_BLUE} 0%,#2563EB 100%);"
+):
             # Card
             with ui.card().style(
-                "width:380px; border-radius:16px; padding:36px 32px;"
+                "width:100%; max-width:420px; border-radius:16px; padding:36px 32px;"
                 "box-shadow:0 8px 32px rgba(0,0,0,.30);"
-            ):
+):
                 # Logo / heading
                 ui.label("⏱").style("font-size:2.5rem; text-align:center; display:block; margin-bottom:4px;")
                 ui.label("WorkHours").style(
@@ -162,7 +164,7 @@ def setup_employee_page():
         page_wrapper("WorkHours – Employee Dashboard")
         nav_bar(username, role)
 
-        with ui.column().classes("w-full px-6 py-6").style("max-width:900px; margin:0 auto;"):
+        with ui.column().classes("w-full px-4 py-6").style("max-width:900px; margin:0 auto; box-sizing:border-box;"):
 
             # ── Submission form ──────────────────────────────────────────────
             with ui.card().style(
@@ -187,8 +189,12 @@ def setup_employee_page():
                 with date_input:
                     with ui.menu().props("no-parent-event") as date_menu:
                         with ui.date(value=date.today().isoformat()).bind_value(date_input) as date_picker:
+                            date_picker.props(":options=\"date => date >= new Date().toISOString().slice(0,10).replaceAll('-','/')\"")
                             with ui.row().classes("justify-end"):
                                 ui.link("Close").on("click", date_menu.close)
+                    with date_input.add_slot("append"):
+                        ui.icon("edit_calendar").on("click", date_menu.open).classes("cursor-pointer")
+
                     with date_input.add_slot("append"):
                         ui.icon("edit_calendar").on("click", date_menu.open).classes("cursor-pointer")
 
@@ -206,8 +212,14 @@ def setup_employee_page():
                 ).classes("w-full").style("margin-bottom:12px;")
                 project_select.props("outlined dense")
 
-                # Hours worked
-                hours_input = ui.number(label="Hours Worked", min=0, max=24, precision=1).classes("w-full").style("margin-bottom:12px;")
+                # Hours work
+                HOUR_OPTIONS = [str(h) for h in range(1, 25)]
+                hours_input = ui.select(
+                    label="Hours Worked",
+                    options=HOUR_OPTIONS,
+                    with_input=True,
+                    new_value_mode="add-unique",
+                ).classes("w-full").style("margin-bottom:12px;")
                 hours_input.props("outlined dense")
 
                 # Remarks
@@ -252,17 +264,27 @@ def setup_employee_page():
                         status_label.style(f"color:{DANGER};")
                         status_label.set_text("Invalid date format. Use YYYY-MM-DD.")
                         return
+                    
+                    if entry_date < date.today():
+                        status_label.style(f"color:{DANGER};")
+                        status_label.set_text("Cannot log hours for past dates.")
+                        return
 
                     if not project_select.value:
                         status_label.style(f"color:{DANGER};")
                         status_label.set_text("Please select a project.")
                         return
 
-                    if hours_input.value is None:
+                    if hours_input.value is None or hours_input.value == "":
                         status_label.style(f"color:{DANGER};")
                         status_label.set_text("Please enter hours worked.")
                         return
-                    hours = float(hours_input.value)
+                    try:
+                        hours = float(hours_input.value)
+                    except (ValueError, TypeError):
+                        status_label.style(f"color:{DANGER};")
+                        status_label.set_text("Hours must be a valid number.")
+                        return
                     if hours <= 0:
                         status_label.style(f"color:{DANGER};")
                         status_label.set_text("Hours must be greater than 0.")
@@ -369,7 +391,7 @@ def setup_admin_page():
         page_wrapper("WorkHours – Admin Dashboard")
         nav_bar(username, role)
 
-        with ui.column().classes("w-full px-6 py-6").style("max-width:1200px; margin:0 auto;"):
+        with ui.column().classes("w-full px-4 py-6").style("max-width:1200px; margin:0 auto; box-sizing:border-box;"):
 
             # ── Section 1: Work Records ──────────────────────────────────────
             ui.label("Section 1 — Employee Work Records").style(
@@ -385,7 +407,7 @@ def setup_admin_page():
                     "color:#475569; font-size:.85rem; font-weight:600; margin-bottom:12px; display:block;"
                 )
                 with ui.row().classes("w-full gap-3 flex-wrap items-end"):
-                    search_input = ui.input(label="Search", placeholder="Search any field...").style("min-width:180px;")
+                    search_input = ui.input(label="Search",placeholder="Search by employee, project, date, hours...").style("min-width:220px;")
                     search_input.props("outlined dense")
 
                     # Employee filter options
@@ -415,6 +437,9 @@ def setup_admin_page():
                     ).props("no-caps")
                     ui.button("Clear", on_click=lambda: clear_filters()).props("flat no-caps").style(
                         "height:38px; color:#64748B;"
+                    )
+                    ui.label("Tip: Search matches employee name, project, date (YYYY-MM-DD), hours, or remarks.").style(
+                        "font-size:.72rem; color:#94A3B8; margin-top:4px; display:block;"
                     )
 
             # Work entries table
