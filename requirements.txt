@@ -1,3 +1,4 @@
+HEAD
 # --- Web framework ---
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
@@ -35,3 +36,12 @@ mypy==1.13.0
 
 # --- Dev utilities ---
 python-multipart==0.0.20
+=======
+nicegui==2.7.0
+fastapi==0.115.0
+uvicorn==0.30.6
+sqlalchemy==2.0.35
+psycopg2-binary==2.9.9
+bcrypt==4.2.0
+python-dotenv==1.0.1
+2391841883c180f8ebf2d0579f2bf1d87e9a7890
