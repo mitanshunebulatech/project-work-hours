@@ -1,0 +1,37 @@
+# --- Web framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+
+# --- ORM / Migrations ---
+sqlalchemy==2.0.36
+alembic==1.14.0
+psycopg2-binary==2.9.10
+
+# --- Validation / Settings ---
+pydantic==2.10.4
+pydantic-settings==2.7.0
+email-validator==2.2.0
+
+# --- Auth / Security ---
+python-jose[cryptography]==3.3.0
+# passlib 1.7.4 (the latest passlib release) reads bcrypt.__about__.__version__ to detect
+# the backend version; bcrypt>=4.1 removed that attribute, which raises
+# "module 'bcrypt' has no attribute '__about__'" at hash-time. Pin bcrypt below that line.
+passlib[bcrypt]==1.7.4
+bcrypt==4.0.1
+slowapi==0.1.9
+
+# --- Frontend ---
+nicegui==2.11.0
+
+# --- Quality ---
+pytest==8.3.4
+pytest-asyncio==0.25.0
+httpx==0.28.1
+ruff==0.8.4
+black==24.10.0
+isort==5.13.2
+mypy==1.13.0
+
+# --- Dev utilities ---
+python-multipart==0.0.20
