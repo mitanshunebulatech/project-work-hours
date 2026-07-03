@@ -4,38 +4,128 @@
 
 @layer base {
   :root {
-    --background: 0 0% 98%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
+    /* Nebula Tech palette, expressed as HSL for the design-token system */
+    --background: 210 40% 98%;        /* #F8FAFC */
+    --foreground: 222 47% 11%;        /* #0F172A */
+    --card: 0 0% 100%;                /* #FFFFFF */
     --card-foreground: 222 47% 11%;
-    --border: 214 32% 91%;
+    --border: 214 32% 91%;            /* #E2E8F0 */
     --input: 214 32% 91%;
-    --ring: 221 83% 53%;
-    --primary: 221 83% 53%;
+    --ring: 217 91% 60%;              /* #3B82F6 */
+    --primary: 221 83% 53%;           /* #2563EB */
     --primary-foreground: 0 0% 100%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 224 76% 33%;         /* #1E40AF, used sparingly as a deep accent */
+    --secondary-foreground: 0 0% 100%;
     --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
+    --muted-foreground: 215 16% 47%;  /* #64748B */
+    --accent: 217 91% 60%;            /* #3B82F6 */
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 84% 60%;         /* #EF4444 */
     --destructive-foreground: 0 0% 100%;
-    --sidebar: 222 47% 11%;
+    --success: 160 84% 39%;           /* #10B981 */
+    --success-foreground: 0 0% 100%;
+    --warning: 38 92% 50%;            /* #F59E0B */
+    --warning-foreground: 0 0% 100%;
+    --sidebar: 222 47% 11%;           /* #0F172A */
     --sidebar-foreground: 215 20% 65%;
     --sidebar-border: 222 40% 18%;
     --sidebar-accent: 222 40% 18%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --radius: 0.5rem;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 98%;
+    --card: 222 44% 11%;
+    --card-foreground: 210 40% 98%;
+    --border: 222 30% 20%;
+    --input: 222 30% 20%;
+    --ring: 217 91% 60%;
+    --primary: 217 91% 60%;
+    --primary-foreground: 222 47% 11%;
+    --secondary: 222 30% 18%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 222 30% 16%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 217 91% 60%;
+    --accent-foreground: 222 47% 11%;
+    --sidebar: 224 55% 5%;
+    --sidebar-foreground: 215 20% 65%;
+    --sidebar-border: 222 40% 14%;
+    --sidebar-accent: 222 40% 14%;
+    --sidebar-accent-foreground: 0 0% 100%;
   }
 }
 
 @layer base {
   * { @apply border-border; }
+  html { -webkit-tap-highlight-color: transparent; }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
     -webkit-font-smoothing: antialiased;
+  }
+  h1, h2, h3, h4 { @apply font-display tracking-tight; }
+}
+
+@layer utilities {
+  /* Glassmorphism surface used on auth screens & floating panels */
+  .glass {
+    background: rgb(255 255 255 / 0.06);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgb(255 255 255 / 0.12);
+  }
+  .glass-light {
+    background: rgb(255 255 255 / 0.72);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border: 1px solid rgb(255 255 255 / 0.6);
+  }
+
+  /* Animated brand gradient mesh, used behind login/marketing surfaces */
+  .bg-nebula-mesh {
+    background-image:
+      radial-gradient(at 20% 20%, hsla(217, 91%, 60%, 0.55) 0px, transparent 50%),
+      radial-gradient(at 80% 0%, hsla(224, 76%, 48%, 0.45) 0px, transparent 50%),
+      radial-gradient(at 0% 80%, hsla(221, 83%, 53%, 0.4) 0px, transparent 50%),
+      radial-gradient(at 80% 100%, hsla(199, 89%, 48%, 0.35) 0px, transparent 50%);
+    background-color: #0b1224;
+  }
+
+  .bg-grid {
+    background-image:
+      linear-gradient(rgb(255 255 255 / 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(255 255 255 / 0.04) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  .text-gradient-brand {
+    background: linear-gradient(135deg, #60a5fa 0%, #3B82F6 45%, #93c5fd 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .card-hover {
+    @apply transition-all duration-200 ease-out;
+  }
+  .card-hover:hover {
+    @apply -translate-y-0.5 shadow-elevated border-nebula-200;
+  }
+
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+  .skeleton-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
+    animation: shimmer 1.6s infinite;
   }
 }
 
