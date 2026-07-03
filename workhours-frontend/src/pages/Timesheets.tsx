@@ -4,7 +4,9 @@ import { useToast } from '@/hooks/useToast'
 import { Card, CardContent, CardHeader, CardTitle, Badge, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Textarea } from '@/components/ui/misc'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, RefreshCw, Pencil } from 'lucide-react'
+import { TableSkeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Plus, RefreshCw, Pencil, ClipboardList } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
 const STATUS_VARIANT: Record<string, any> = {
@@ -82,12 +84,23 @@ export default function Timesheets() {
   const today = new Date().toISOString().slice(0, 10)
   const canEdit = (e: any) => e.status === 'pending' && e.entry_date === today
 
+  const weekHours = entries
+    .filter(e => {
+      const d = new Date(e.entry_date)
+      const now = new Date()
+      const start = new Date(now); start.setDate(now.getDate() - now.getDay())
+      return d >= start
+    })
+    .reduce((s, e) => s + parseFloat(e.hours_worked), 0)
+
   return (
     <div className="p-8 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">My Timesheets</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Submit and track your daily work hours</p>
+          <h1 className="text-2xl font-display font-semibold text-foreground">My Timesheets</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Submit and track your daily work hours · <span className="font-medium text-foreground">{weekHours.toFixed(1)}h</span> logged this week
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load}><RefreshCw size={14} /></Button>
@@ -99,14 +112,14 @@ export default function Timesheets() {
 
       {/* Submit form */}
       {showForm && (
-        <Card className="mb-6 border-blue-200 shadow-sm">
+        <Card className="mb-6 border-nebula-200 shadow-elevated animate-in fade-in slide-in-from-top-1 duration-200">
           <CardHeader className="pb-3">
             <CardTitle>{editEntry ? 'Edit Entry' : 'Log Work Hours'}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Project <span className="text-red-500">*</span></Label>
+                <Label>Project <span className="text-destructive">*</span></Label>
                 <Select value={form.project_id} onValueChange={v => setForm(f => ({ ...f, project_id: v }))}>
                   <SelectTrigger><SelectValue placeholder="Select project" /></SelectTrigger>
                   <SelectContent>
@@ -115,14 +128,14 @@ export default function Timesheets() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Date <span className="text-red-500">*</span></Label>
+                <Label>Date <span className="text-destructive">*</span></Label>
                 <Input type="date" value={form.entry_date} max={today}
                   onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Hours Worked <span className="text-red-500">*</span></Label>
+                <Label>Hours Worked <span className="text-destructive">*</span></Label>
                 <Select value={form.hours_worked} onValueChange={v => setForm(f => ({ ...f, hours_worked: v }))}>
                   <SelectTrigger><SelectValue placeholder="Select or type hours" /></SelectTrigger>
                   <SelectContent>
@@ -141,8 +154,8 @@ export default function Timesheets() {
               </div>
             </div>
             <div className="flex gap-2 pt-1">
-              <Button size="sm" onClick={handleSubmit} disabled={submitting}>
-                {submitting ? 'Saving...' : editEntry ? 'Update Entry' : 'Submit Entry'}
+              <Button size="sm" onClick={handleSubmit} loading={submitting}>
+                {editEntry ? 'Update Entry' : 'Submit Entry'}
               </Button>
               <Button size="sm" variant="outline" onClick={resetForm}>Cancel</Button>
             </div>
@@ -157,44 +170,46 @@ export default function Timesheets() {
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-6 space-y-3">
-              {[1,2,3].map(i => <div key={i} className="h-10 bg-slate-100 rounded animate-pulse" />)}
-            </div>
+            <TableSkeleton rows={4} cols={6} />
           ) : entries.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-slate-400">
-              No entries yet. Click "Log Hours" to get started.
-            </div>
+            <EmptyState
+              icon={ClipboardList}
+              title="No entries yet"
+              description='Click "Log Hours" above to submit your first timesheet.'
+            />
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-500">Date</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-500">Project</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-500">Hours</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-500">Remarks</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-500">Status</th>
-                  <th className="px-6 py-3" />
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((e: any) => (
-                  <tr key={e.id} className="border-b last:border-0 hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-3.5 text-slate-600 whitespace-nowrap">{formatDate(e.entry_date)}</td>
-                    <td className="px-6 py-3.5 font-medium text-slate-900">{e.project_name}</td>
-                    <td className="px-6 py-3.5 text-slate-700 font-medium">{e.hours_worked}h</td>
-                    <td className="px-6 py-3.5 text-slate-500 max-w-[200px] truncate">{e.remarks || '—'}</td>
-                    <td className="px-6 py-3.5"><Badge variant={STATUS_VARIANT[e.status]}>{e.status}</Badge></td>
-                    <td className="px-6 py-3.5 text-right">
-                      {canEdit(e) && (
-                        <button onClick={() => openEdit(e)} className="text-slate-400 hover:text-blue-600 transition-colors">
-                          <Pencil size={14} />
-                        </button>
-                      )}
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Date</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Project</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Hours</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Remarks</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Status</th>
+                    <th className="px-6 py-3" />
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {entries.map((e: any) => (
+                    <tr key={e.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
+                      <td className="px-6 py-3.5 text-muted-foreground whitespace-nowrap">{formatDate(e.entry_date)}</td>
+                      <td className="px-6 py-3.5 font-medium text-foreground">{e.project_name}</td>
+                      <td className="px-6 py-3.5 text-foreground font-medium tabular-nums">{e.hours_worked}h</td>
+                      <td className="px-6 py-3.5 text-muted-foreground max-w-[200px] truncate">{e.remarks || '—'}</td>
+                      <td className="px-6 py-3.5"><Badge variant={STATUS_VARIANT[e.status]} dot>{e.status}</Badge></td>
+                      <td className="px-6 py-3.5 text-right">
+                        {canEdit(e) && (
+                          <button onClick={() => openEdit(e)} className="text-muted-foreground hover:text-nebula-600 transition-colors">
+                            <Pencil size={14} />
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>

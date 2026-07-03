@@ -9,7 +9,7 @@ the web framework and the domain layer.
 from collections.abc import Callable
 
 from fastapi import Depends, Request
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
 from sqlalchemy.orm import Session
 
@@ -19,16 +19,25 @@ from app.db.repositories.user_repo import UserRepository
 from app.db.session import get_db
 from app.models.user import User
 
-# tokenUrl is documentation-only (shown in /docs); the actual login endpoint is /api/v1/auth/login
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login", auto_error=False)
+# HTTPBearer (not OAuth2PasswordBearer) is used deliberately: this API's login
+# endpoint takes a JSON body (LoginRequest), not the OAuth2 password-grant's
+# form-urlencoded contract. OAuth2PasswordBearer makes Swagger UI's "Authorize"
+# dialog POST form data to tokenUrl, which this login endpoint would reject —
+# leaving every subsequent "Try it out" call unauthenticated (401), even with
+# valid credentials. HTTPBearer instead gives Swagger UI a plain "paste your
+# token" field, which matches how auth actually works here: call /auth/login
+# manually, copy the returned access_token, paste it into Authorize.
+bearer_scheme = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
-    token: str | None = Depends(oauth2_scheme),
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
-    if not token:
+    if not credentials:
         raise UnauthorizedError("Not authenticated")
+
+    token = credentials.credentials
 
     try:
         payload = decode_token(token)

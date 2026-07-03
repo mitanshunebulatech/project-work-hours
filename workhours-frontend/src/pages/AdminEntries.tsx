@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { getEntries, approveEntry, rejectEntry, deleteEntry } from '@/lib/api'
 import { useToast } from '@/hooks/useToast'
-import { Card, CardContent, CardHeader, CardTitle, Badge, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Label, Textarea } from '@/components/ui/misc'
+import { Card, CardContent, Badge, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Label, Textarea } from '@/components/ui/misc'
 import { Button } from '@/components/ui/button'
-import { RefreshCw, Check, X, Trash2 } from 'lucide-react'
+import { UserAvatar } from '@/components/ui/avatar'
+import { TableSkeleton } from '@/components/ui/skeleton'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { RefreshCw, Check, X, Trash2, Download, Inbox } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
 const STATUS_VARIANT: Record<string, any> = {
@@ -69,8 +73,8 @@ export default function AdminEntries() {
     <div className="p-8 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">All Entries</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{total} total submissions</p>
+          <h1 className="text-2xl font-display font-semibold text-foreground">All Entries</h1>
+          <p className="text-sm text-muted-foreground mt-1">{total} total submissions</p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -84,7 +88,7 @@ export default function AdminEntries() {
           </Select>
           <Button variant="outline" size="sm" onClick={load}><RefreshCw size={14} /></Button>
           <Button variant="outline" size="sm" onClick={() => window.open('/api/v1/reports/export', '_blank')}>
-            Export CSV
+            <Download size={14} /> Export CSV
           </Button>
         </div>
       </div>
@@ -92,100 +96,105 @@ export default function AdminEntries() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-6 space-y-3">
-              {[1,2,3,4,5].map(i => <div key={i} className="h-10 bg-slate-100 rounded animate-pulse" />)}
-            </div>
+            <TableSkeleton rows={6} cols={7} />
           ) : entries.length === 0 ? (
-            <div className="px-6 py-12 text-center text-sm text-slate-400">No entries match this filter.</div>
+            <EmptyState icon={Inbox} title="No entries match this filter" description="Try switching the status filter above." />
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="text-left px-5 py-3 text-xs font-medium text-slate-500">Employee</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-slate-500">Project</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-slate-500">Date</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-slate-500">Hours</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-slate-500">Remarks</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium text-slate-500">Status</th>
-                  <th className="px-5 py-3 text-right text-xs font-medium text-slate-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {entries.map((e: any) => (
-                  <tr key={e.id} className="border-b last:border-0 hover:bg-slate-50 transition-colors">
-                    <td className="px-5 py-3.5 font-medium text-slate-900">{e.employee_username}</td>
-                    <td className="px-5 py-3.5 text-slate-700">{e.project_name}</td>
-                    <td className="px-5 py-3.5 text-slate-600 whitespace-nowrap">{formatDate(e.entry_date)}</td>
-                    <td className="px-5 py-3.5 font-medium text-slate-900">{e.hours_worked}h</td>
-                    <td className="px-5 py-3.5 text-slate-500 max-w-[160px] truncate">{e.remarks || '—'}</td>
-                    <td className="px-5 py-3.5"><Badge variant={STATUS_VARIANT[e.status]}>{e.status}</Badge></td>
-                    <td className="px-5 py-3.5">
-                      <div className="flex items-center justify-end gap-1">
-                        {e.status === 'pending' && (
-                          <>
-                            <button
-                              onClick={() => handleApprove(e.id)}
-                              disabled={actionLoading === e.id}
-                              className="p-1.5 rounded hover:bg-emerald-50 text-slate-400 hover:text-emerald-600 transition-colors"
-                              title="Approve"
-                            >
-                              <Check size={14} />
-                            </button>
-                            <button
-                              onClick={() => { setRejectDialog(e); setRejectReason('') }}
-                              disabled={actionLoading === e.id}
-                              className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-600 transition-colors"
-                              title="Reject"
-                            >
-                              <X size={14} />
-                            </button>
-                          </>
-                        )}
-                        <button
-                          onClick={() => handleDelete(e.id)}
-                          disabled={actionLoading === e.id}
-                          className="p-1.5 rounded hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Employee</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Project</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Date</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Hours</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Remarks</th>
+                    <th className="text-left px-5 py-3 text-xs font-medium text-muted-foreground">Status</th>
+                    <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {entries.map((e: any) => (
+                    <tr key={e.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center gap-2.5">
+                          <UserAvatar name={e.employee_username} size={24} />
+                          <span className="font-medium text-foreground">{e.employee_username}</span>
+                        </div>
+                      </td>
+                      <td className="px-5 py-3.5 text-foreground/80">{e.project_name}</td>
+                      <td className="px-5 py-3.5 text-muted-foreground whitespace-nowrap">{formatDate(e.entry_date)}</td>
+                      <td className="px-5 py-3.5 font-medium text-foreground tabular-nums">{e.hours_worked}h</td>
+                      <td className="px-5 py-3.5 text-muted-foreground max-w-[160px] truncate">{e.remarks || '—'}</td>
+                      <td className="px-5 py-3.5"><Badge variant={STATUS_VARIANT[e.status]} dot>{e.status}</Badge></td>
+                      <td className="px-5 py-3.5">
+                        <div className="flex items-center justify-end gap-1">
+                          {e.status === 'pending' && (
+                            <>
+                              <button
+                                onClick={() => handleApprove(e.id)}
+                                disabled={actionLoading === e.id}
+                                className="p-1.5 rounded hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 transition-colors disabled:opacity-40"
+                                title="Approve"
+                              >
+                                <Check size={14} />
+                              </button>
+                              <button
+                                onClick={() => { setRejectDialog(e); setRejectReason('') }}
+                                disabled={actionLoading === e.id}
+                                className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-600 transition-colors disabled:opacity-40"
+                                title="Reject"
+                              >
+                                <X size={14} />
+                              </button>
+                            </>
+                          )}
+                          <button
+                            onClick={() => handleDelete(e.id)}
+                            disabled={actionLoading === e.id}
+                            className="p-1.5 rounded hover:bg-red-50 text-muted-foreground hover:text-red-500 transition-colors disabled:opacity-40"
+                            title="Delete"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>
 
       {/* Reject dialog */}
-      {rejectDialog && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6">
-            <h2 className="text-base font-semibold text-slate-900 mb-1">Reject entry</h2>
-            <p className="text-sm text-slate-500 mb-4">
-              {rejectDialog.employee_username} · {rejectDialog.project_name} · {rejectDialog.hours_worked}h
-            </p>
-            <div className="space-y-1.5 mb-4">
-              <Label>Reason <span className="text-red-500">*</span></Label>
-              <Textarea
-                placeholder="Explain why this entry is being rejected..."
-                value={rejectReason}
-                onChange={e => setRejectReason(e.target.value)}
-                rows={3}
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" size="sm" onClick={() => setRejectDialog(null)}>Cancel</Button>
-              <Button variant="destructive" size="sm" onClick={handleReject}
-                disabled={actionLoading === rejectDialog.id}>
-                {actionLoading === rejectDialog.id ? 'Rejecting...' : 'Reject Entry'}
-              </Button>
-            </div>
+      <Dialog open={!!rejectDialog} onOpenChange={open => !open && setRejectDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject entry</DialogTitle>
+            <DialogDescription>
+              {rejectDialog && `${rejectDialog.employee_username} · ${rejectDialog.project_name} · ${rejectDialog.hours_worked}h`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Reason <span className="text-destructive">*</span></Label>
+            <Textarea
+              placeholder="Explain why this entry is being rejected..."
+              value={rejectReason}
+              onChange={e => setRejectReason(e.target.value)}
+              rows={3}
+            />
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRejectDialog(null)}>Cancel</Button>
+            <Button variant="destructive" size="sm" onClick={handleReject}
+              loading={actionLoading === rejectDialog?.id}>
+              Reject Entry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
