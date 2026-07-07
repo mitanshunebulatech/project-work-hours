@@ -4,7 +4,9 @@ import { useToast } from '@/hooks/useToast'
 import { Card, CardContent, CardHeader, CardTitle, Badge, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/misc'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Plus, RefreshCw, ToggleLeft, ToggleRight } from 'lucide-react'
+import { UserAvatar } from '@/components/ui/avatar'
+import { TableSkeleton } from '@/components/ui/skeleton'
+import { Plus, RefreshCw, ToggleLeft, ToggleRight, Users } from 'lucide-react'
 
 export default function AdminUsers() {
   const { toast } = useToast()
@@ -60,12 +62,16 @@ export default function AdminUsers() {
     }
   }
 
+  const activeCount = users.filter(u => u.is_active).length
+
   return (
     <div className="p-8 max-w-5xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Users</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Manage employee and admin accounts</p>
+          <h1 className="text-2xl font-display font-semibold text-foreground">Users</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage employee and admin accounts · <span className="font-medium text-foreground">{activeCount}</span> active
+          </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load}><RefreshCw size={14} /></Button>
@@ -74,15 +80,15 @@ export default function AdminUsers() {
       </div>
 
       {showForm && (
-        <Card className="mb-6 border-blue-200">
+        <Card className="mb-6 border-nebula-200 shadow-elevated animate-in fade-in slide-in-from-top-1 duration-200">
           <CardHeader className="pb-3"><CardTitle>Create New User</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>Username <span className="text-red-500">*</span></Label>
+                <Label>Username <span className="text-destructive">*</span></Label>
                 <Input placeholder="e.g. john.doe" value={form.username}
                   onChange={e => setForm(f => ({ ...f, username: e.target.value }))} />
-                {errors.username && <p className="text-xs text-red-500">{errors.username}</p>}
+                {errors.username && <p className="text-xs text-destructive">{errors.username}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label>Email</Label>
@@ -90,10 +96,10 @@ export default function AdminUsers() {
                   onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Password <span className="text-red-500">*</span></Label>
+                <Label>Password <span className="text-destructive">*</span></Label>
                 <Input type="password" placeholder="Min 8 chars, letter + number" value={form.password}
                   onChange={e => setForm(f => ({ ...f, password: e.target.value }))} />
-                {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
+                {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label>Role</Label>
@@ -107,9 +113,7 @@ export default function AdminUsers() {
               </div>
             </div>
             <div className="flex gap-2 pt-1">
-              <Button size="sm" onClick={handleCreate} disabled={submitting}>
-                {submitting ? 'Creating...' : 'Create User'}
-              </Button>
+              <Button size="sm" onClick={handleCreate} loading={submitting}>Create User</Button>
               <Button size="sm" variant="outline" onClick={() => { setShowForm(false); setErrors({}) }}>Cancel</Button>
             </div>
           </CardContent>
@@ -119,53 +123,56 @@ export default function AdminUsers() {
       <Card>
         <CardContent className="p-0">
           {loading ? (
-            <div className="p-6 space-y-3">
-              {[1,2,3].map(i => <div key={i} className="h-12 bg-slate-100 rounded animate-pulse" />)}
+            <TableSkeleton rows={5} cols={5} />
+          ) : users.length === 0 ? (
+            <div className="px-6 py-12 text-center">
+              <Users size={28} className="mx-auto text-muted-foreground/30 mb-3" />
+              <p className="text-sm text-muted-foreground">No users yet</p>
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-slate-50">
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-500">User</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-500">Email</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-500">Role</th>
-                  <th className="text-left px-6 py-3 text-xs font-medium text-slate-500">Status</th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-slate-500">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((u: any) => (
-                  <tr key={u.id} className="border-b last:border-0 hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-3.5">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 text-xs font-bold">
-                          {u.username[0].toUpperCase()}
-                        </div>
-                        <span className="font-medium text-slate-900">{u.username}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-3.5 text-slate-500">{u.email || '—'}</td>
-                    <td className="px-6 py-3.5">
-                      <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>{u.role}</Badge>
-                    </td>
-                    <td className="px-6 py-3.5">
-                      <Badge variant={u.is_active ? 'success' : 'outline'}>
-                        {u.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-3.5 text-right">
-                      <button
-                        onClick={() => handleToggleActive(u)}
-                        className={`transition-colors ${u.is_active ? 'text-emerald-500 hover:text-red-500' : 'text-slate-400 hover:text-emerald-500'}`}
-                        title={u.is_active ? 'Deactivate' : 'Activate'}
-                      >
-                        {u.is_active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-                      </button>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/40">
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">User</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Email</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Role</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Status</th>
+                    <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {users.map((u: any) => (
+                    <tr key={u.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
+                      <td className="px-6 py-3.5">
+                        <div className="flex items-center gap-3">
+                          <UserAvatar name={u.username} size={30} />
+                          <span className="font-medium text-foreground">{u.username}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-3.5 text-muted-foreground">{u.email || '—'}</td>
+                      <td className="px-6 py-3.5">
+                        <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>{u.role}</Badge>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <Badge variant={u.is_active ? 'success' : 'outline'} dot>
+                          {u.is_active ? 'Active' : 'Inactive'}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-3.5 text-right">
+                        <button
+                          onClick={() => handleToggleActive(u)}
+                          className={`transition-colors ${u.is_active ? 'text-emerald-500 hover:text-red-500' : 'text-muted-foreground hover:text-emerald-500'}`}
+                          title={u.is_active ? 'Deactivate' : 'Activate'}
+                        >
+                          {u.is_active ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </CardContent>
       </Card>

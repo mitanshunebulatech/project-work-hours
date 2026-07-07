@@ -8,29 +8,49 @@ import { cn } from '@/lib/utils'
 
 // Badge
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors',
+  'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors',
   {
     variants: {
       variant: {
         default: 'border-transparent bg-primary text-primary-foreground',
         secondary: 'border-transparent bg-secondary text-secondary-foreground',
-        destructive: 'border-transparent bg-destructive text-destructive-foreground',
+        destructive: 'border-transparent bg-red-50 text-red-700',
         outline: 'text-foreground',
-        success: 'border-transparent bg-emerald-100 text-emerald-700',
-        warning: 'border-transparent bg-amber-100 text-amber-700',
-        pending: 'border-transparent bg-blue-100 text-blue-700',
+        success: 'border-transparent bg-emerald-50 text-emerald-700',
+        warning: 'border-transparent bg-amber-50 text-amber-700',
+        pending: 'border-transparent bg-blue-50 text-blue-700',
       },
     },
     defaultVariants: { variant: 'default' },
   }
 )
-export function Badge({ className, variant, ...props }: React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof badgeVariants>) {
-  return <div className={cn(badgeVariants({ variant }), className)} {...props} />
+export function Badge({
+  className, variant, dot = false, ...props
+}: React.HTMLAttributes<HTMLDivElement> & VariantProps<typeof badgeVariants> & { dot?: boolean }) {
+  const dotColor: Record<string, string> = {
+    default: 'bg-primary-foreground', secondary: 'bg-secondary-foreground', destructive: 'bg-red-600',
+    outline: 'bg-foreground', success: 'bg-emerald-600', warning: 'bg-amber-600', pending: 'bg-blue-600',
+  }
+  return (
+    <div className={cn(badgeVariants({ variant }), className)} {...props}>
+      {dot && <span className={cn('h-1.5 w-1.5 rounded-full', dotColor[variant || 'default'])} />}
+      {props.children}
+    </div>
+  )
 }
 
 // Card
-export function Card({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('rounded-lg border bg-card text-card-foreground shadow-sm', className)} {...props} />
+export function Card({ className, hover = false, ...props }: React.HTMLAttributes<HTMLDivElement> & { hover?: boolean }) {
+  return (
+    <div
+      className={cn(
+        'rounded-xl border bg-card text-card-foreground shadow-card',
+        hover && 'card-hover cursor-pointer',
+        className
+      )}
+      {...props}
+    />
+  )
 }
 export function CardHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
   return <div className={cn('flex flex-col space-y-1.5 p-6', className)} {...props} />
@@ -70,7 +90,7 @@ Separator.displayName = 'Separator'
 export const Textarea = React.forwardRef<HTMLTextAreaElement, React.TextareaHTMLAttributes<HTMLTextAreaElement>>(
   ({ className, ...props }, ref) => (
     <textarea
-      className={cn('flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50', className)}
+      className={cn('flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-soft placeholder:text-muted-foreground transition-all duration-150 hover:border-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:border-primary disabled:cursor-not-allowed disabled:opacity-50', className)}
       ref={ref}
       {...props}
     />
@@ -87,7 +107,7 @@ export const SelectTrigger = React.forwardRef<
 >(({ className, children, ...props }, ref) => (
   <SelectPrimitive.Trigger
     ref={ref}
-    className={cn('flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm ring-offset-background placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring disabled:cursor-not-allowed disabled:opacity-50', className)}
+    className={cn('flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm shadow-soft ring-offset-background transition-all duration-150 placeholder:text-muted-foreground hover:border-primary/30 focus:outline-none focus:ring-2 focus:ring-ring/40 focus:border-primary disabled:cursor-not-allowed disabled:opacity-50', className)}
     {...props}
   >
     {children}
@@ -103,7 +123,7 @@ export const SelectContent = React.forwardRef<
   <SelectPrimitive.Portal>
     <SelectPrimitive.Content
       ref={ref}
-      className={cn('relative z-50 min-w-[8rem] overflow-hidden rounded-md border bg-card text-card-foreground shadow-md', className)}
+      className={cn('relative z-50 min-w-[8rem] overflow-hidden rounded-lg border bg-card text-card-foreground shadow-elevated animate-in fade-in-0 zoom-in-95', className)}
       position={position}
       {...props}
     >

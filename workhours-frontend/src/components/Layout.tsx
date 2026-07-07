@@ -1,12 +1,19 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/useToast'
+import { useTheme } from '@/hooks/useTheme'
 import {
   Clock, LayoutDashboard, Users, FolderOpen,
-  BarChart3, Shield, LogOut, ChevronRight
+  BarChart3, Shield, LogOut, ChevronLeft, ChevronRight,
+  Search, Bell, Moon, Sun, Settings, User as UserIcon, Command
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ReactNode } from 'react'
+import { ReactNode, useState } from 'react'
+import { UserAvatar } from '@/components/ui/avatar'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
+  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu'
 
 interface NavItem { label: string; to: string; icon: ReactNode; adminOnly?: boolean }
 
@@ -20,11 +27,24 @@ const navItems: NavItem[] = [
   { label: 'Audit Log', to: '/admin/audit', icon: <Shield size={18} />, adminOnly: true },
 ]
 
+const PAGE_TITLES: Record<string, string> = {
+  '/dashboard': 'Dashboard',
+  '/timesheets': 'My Timesheets',
+  '/admin/entries': 'Entries',
+  '/admin/users': 'Users',
+  '/admin/projects': 'Projects',
+  '/admin/reports': 'Reports',
+  '/admin/audit': 'Audit Log',
+}
+
 export default function Layout({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth()
   const { toast } = useToast()
+  const { theme, toggle } = useTheme()
   const navigate = useNavigate()
+  const location = useLocation()
   const isAdmin = user?.role === 'admin'
+  const [collapsed, setCollapsed] = useState(false)
 
   const handleLogout = async () => {
     await logout()
@@ -33,27 +53,39 @@ export default function Layout({ children }: { children: ReactNode }) {
   }
 
   const visibleNav = navItems.filter(i => !i.adminOnly || isAdmin)
+  const pageTitle = PAGE_TITLES[location.pathname] || 'WorkHours'
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* Sidebar */}
-      <aside className="flex flex-col w-56 shrink-0" style={{ background: 'hsl(222 47% 11%)' }}>
+      <aside
+        className={cn(
+          'relative flex flex-col shrink-0 bg-sidebar transition-[width] duration-200 ease-out',
+          collapsed ? 'w-[72px]' : 'w-64'
+        )}
+      >
         {/* Logo */}
-        <div className="flex items-center gap-2.5 px-5 h-14 border-b" style={{ borderColor: 'hsl(222 40% 18%)' }}>
-          <div className="w-7 h-7 rounded-md bg-blue-500 flex items-center justify-center">
+        <div className={cn('flex items-center h-14 border-b border-sidebar-border', collapsed ? 'justify-center px-0' : 'gap-2.5 px-5')}>
+          <div className="w-7 h-7 rounded-md bg-gradient-to-br from-nebula-500 to-nebula-700 flex items-center justify-center shrink-0 shadow-glow">
             <Clock size={14} className="text-white" />
           </div>
-          <span className="text-white font-semibold text-sm tracking-tight">WorkHours</span>
+          {!collapsed && (
+            <span className="text-white font-display font-semibold text-sm tracking-tight">
+              WorkHours
+            </span>
+          )}
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
           {visibleNav.map(item => (
             <NavLink
               key={item.to}
               to={item.to}
+              title={collapsed ? item.label : undefined}
               className={({ isActive }) => cn(
-                'flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors group',
+                'relative flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors group',
+                collapsed && 'justify-center px-0',
                 isActive
                   ? 'bg-white/10 text-white'
                   : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
@@ -61,38 +93,115 @@ export default function Layout({ children }: { children: ReactNode }) {
             >
               {({ isActive }) => (
                 <>
-                  <span className={cn('transition-colors', isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300')}>
+                  {isActive && (
+                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-nebula-400" />
+                  )}
+                  <span className={cn('shrink-0 transition-colors', isActive ? 'text-nebula-400' : 'text-slate-500 group-hover:text-slate-300')}>
                     {item.icon}
                   </span>
-                  <span>{item.label}</span>
-                  {isActive && <ChevronRight size={14} className="ml-auto text-slate-500" />}
+                  {!collapsed && <span className="truncate">{item.label}</span>}
                 </>
               )}
             </NavLink>
           ))}
         </nav>
 
+        {/* Collapse toggle */}
+        <button
+          onClick={() => setCollapsed(c => !c)}
+          className="mx-3 mb-2 flex items-center justify-center h-8 rounded-md text-slate-500 hover:bg-white/5 hover:text-slate-200 transition-colors"
+        >
+          {collapsed ? <ChevronRight size={15} /> : <><ChevronLeft size={15} /><span className="ml-1.5 text-xs">Collapse</span></>}
+        </button>
+
         {/* User footer */}
-        <div className="px-3 py-3 border-t" style={{ borderColor: 'hsl(222 40% 18%)' }}>
-          <div className="flex items-center gap-3 px-3 py-2 rounded-md">
-            <div className="w-7 h-7 rounded-full bg-blue-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {user?.username?.[0]?.toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-white text-xs font-medium truncate">{user?.username}</p>
-              <p className="text-slate-500 text-xs capitalize">{user?.role}</p>
-            </div>
-            <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors">
-              <LogOut size={15} />
-            </button>
+        <div className={cn('border-t border-sidebar-border', collapsed ? 'px-2 py-3' : 'px-3 py-3')}>
+          <div className={cn('flex items-center rounded-md', collapsed ? 'justify-center' : 'gap-3 px-1 py-1')}>
+            <UserAvatar name={user?.username} size={28} />
+            {!collapsed && (
+              <>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-xs font-medium truncate">{user?.username}</p>
+                  <p className="text-slate-500 text-xs capitalize">{user?.role}</p>
+                </div>
+                <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors" title="Sign out">
+                  <LogOut size={15} />
+                </button>
+              </>
+            )}
           </div>
         </div>
       </aside>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
-        {children}
-      </main>
+      {/* Main column */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Topbar */}
+        <header className="sticky top-0 z-30 flex items-center gap-4 h-14 px-6 border-b border-border bg-background/80 backdrop-blur-md">
+          <div className="flex items-center gap-1.5 text-sm min-w-0">
+            <span className="text-muted-foreground">WorkHours</span>
+            <ChevronRight size={14} className="text-muted-foreground/50" />
+            <span className="font-medium text-foreground truncate">{pageTitle}</span>
+          </div>
+
+          <button
+            className="hidden sm:flex items-center gap-2 ml-2 h-8 px-3 rounded-md border border-input bg-muted/40 text-sm text-muted-foreground hover:border-primary/30 hover:text-foreground transition-colors w-64"
+            onClick={() => toast('Command palette coming soon', 'info')}
+          >
+            <Search size={14} />
+            <span className="flex-1 text-left">Search…</span>
+            <span className="flex items-center gap-0.5 text-xs text-muted-foreground/70">
+              <Command size={11} />K
+            </span>
+          </button>
+
+          <div className="ml-auto flex items-center gap-1.5">
+            <button
+              onClick={toggle}
+              className="h-9 w-9 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              title="Toggle theme"
+            >
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            <button
+              className="relative h-9 w-9 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              onClick={() => toast('No new notifications', 'info')}
+              title="Notifications"
+            >
+              <Bell size={16} />
+              <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-nebula-500 animate-pulse-ring" />
+            </button>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger className="ml-1.5 flex items-center gap-2 rounded-md p-1 pr-2 hover:bg-muted transition-colors outline-none">
+                <UserAvatar name={user?.username} size={28} />
+                <span className="hidden md:block text-sm font-medium text-foreground">{user?.username}</span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-52">
+                <DropdownMenuLabel>
+                  <p className="font-medium">{user?.username}</p>
+                  <p className="font-normal text-muted-foreground capitalize">{user?.role}</p>
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => toast('Profile settings coming soon', 'info')}>
+                  <UserIcon size={14} /> Profile
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => toast('Settings coming soon', 'info')}>
+                  <Settings size={14} /> Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem destructive onClick={handleLogout}>
+                  <LogOut size={14} /> Sign out
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        {/* Page content */}
+        <main key={location.pathname} className="flex-1 overflow-y-auto animate-in fade-in slide-in-from-bottom-1 duration-300">
+          {children}
+        </main>
+      </div>
     </div>
   )
 }
