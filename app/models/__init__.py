@@ -8,6 +8,7 @@ from app.models.audit_log import AuditLog
 from app.models.leave_balance import LeaveBalance
 from app.models.leave_ledger import LeaveLedgerEntry
 from app.models.leave_policy import LeavePolicy
+from app.models.leave_request import LeaveRequest
 from app.models.leave_type import LeaveType
 from app.models.project import Project
 from app.models.refresh_token import RefreshToken
@@ -24,4 +25,5 @@ __all__ = [
     "LeavePolicy",
     "LeaveBalance",
     "LeaveLedgerEntry",
+    "LeaveRequest",
 ]
