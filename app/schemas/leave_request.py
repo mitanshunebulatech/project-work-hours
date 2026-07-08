@@ -45,6 +45,7 @@ class LeaveRequestCreate(BaseModel):
     end_date: date
     is_half_day: bool = False
     reason: str = Field(min_length=3, max_length=2000)
+    attachment_path: str | None = None  # populated by the endpoint after file upload (task 31)
 
     @model_validator(mode="after")
     def _validate_range(self) -> "LeaveRequestCreate":
