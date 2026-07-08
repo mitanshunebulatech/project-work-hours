@@ -22,20 +22,23 @@ BR-06: no overlapping pending/approved request for the same employee is
        allowed — checked against LeaveRequestRepository.find_overlapping().
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
+from app.core.exceptions import BusinessRuleError, ConflictError, ForbiddenError, NotFoundError
 from app.db.repositories.audit_repo import AuditRepository
 from app.db.repositories.holiday_repo import HolidayRepository
 from app.db.repositories.leave_balance_repo import LeaveBalanceRepository
+from app.db.repositories.leave_ledger_repo import LeaveLedgerRepository
 from app.db.repositories.leave_policy_repo import LeavePolicyRepository
 from app.db.repositories.leave_request_repo import LeaveRequestRepository
 from app.db.repositories.leave_type_repo import LeaveTypeRepository
+from app.models.leave_ledger import LeaveLedgerEntry
 from app.models.leave_request import LeaveRequest
 from app.models.leave_type import LeaveType
+from app.schemas.leave_ledger import LedgerTransactionType
 from app.schemas.leave_request import LeavePreviewRequest, LeavePreviewResponse, LeaveRequestCreate
 
 WEEKEND_WEEKDAYS = {5, 6}  # Monday=0 ... Saturday=5, Sunday=6
@@ -48,6 +51,7 @@ class LeaveService:
         self.leave_policy_repo = LeavePolicyRepository(db)
         self.leave_balance_repo = LeaveBalanceRepository(db)
         self.leave_request_repo = LeaveRequestRepository(db)
+        self.leave_ledger_repo = LeaveLedgerRepository(db)
         self.holiday_repo = HolidayRepository(db)
         self.audit_repo = AuditRepository(db)
 
@@ -284,3 +288,94 @@ class LeaveService:
         self.db.commit()
 
         return created
+
+    def cancel_request(
+        self,
+        *,
+        request_id: int,
+        requesting_user_id: int,
+        is_admin: bool,
+        ip_address: str | None = None,
+    ) -> LeaveRequest:
+        """
+        Two distinct branches (Phase 3's design):
+        - status='pending' -> straight cancel, zero ledger effect (nothing
+          was ever debited).
+        - status='approved' AND start_date still in the future -> cancel +
+          write a CANCELLATION_REVERSAL ledger credit that undoes the
+          original LEAVE_DEBIT, and update the cached balance to match.
+        - status='approved' AND start_date has already passed -> rejected
+          outright (400). You cannot self-service "un-take" leave that
+          already happened — that needs a manual admin ledger adjustment
+          (Task 18's endpoint), not a cancel action.
+        - status in ('rejected', 'cancelled') -> rejected outright (409),
+          idempotency guard, same pattern as approve/reject will use later.
+        """
+        request = self.leave_request_repo.get_with_relations(request_id)
+        if request is None:
+            raise NotFoundError("Leave request not found")
+
+        if not is_admin and request.employee_id != requesting_user_id:
+            raise ForbiddenError("You can only cancel your own leave requests")
+
+        if request.status in ("rejected", "cancelled"):
+            raise ConflictError(f"This request is already {request.status}; nothing to cancel")
+
+        before_status = request.status
+        now = datetime.now(timezone.utc)
+
+        if request.status == "pending":
+            request.status = "cancelled"
+            request.cancelled_at = now
+            self.leave_request_repo.update(request)
+
+        elif request.status == "approved":
+            if request.start_date <= date.today():
+                raise BusinessRuleError(
+                    "This leave has already started or passed and cannot be self-service "
+                    "cancelled. Contact an admin for a manual ledger correction."
+                )
+
+            leave_type = self.leave_type_repo.get(request.leave_type_id)
+            if leave_type is not None and leave_type.is_paid:
+                policy = self.leave_policy_repo.get_for_type_year(
+                    leave_type_id=leave_type.id, year=request.start_date.year
+                )
+                if policy is not None:
+                    balance = self.leave_balance_repo.get_or_create_for_year(
+                        employee_id=request.employee_id,
+                        leave_type_id=leave_type.id,
+                        year=request.start_date.year,
+                    )
+                    # Reverse the original debit: reduce total_debited_days by
+                    # the same amount, which raises remaining_days back up.
+                    self.leave_balance_repo.adjust_balance(
+                        balance, debit_delta=-request.working_days_count
+                    )
+                    self.leave_ledger_repo.create(
+                        LeaveLedgerEntry(
+                            employee_id=request.employee_id,
+                            leave_type_id=leave_type.id,
+                            leave_request_id=request.id,
+                            transaction_type=LedgerTransactionType.CANCELLATION_REVERSAL.value,
+                            amount_days=request.working_days_count,
+                            reason=f"Reversal: leave request #{request.id} cancelled after approval",
+                        )
+                    )
+
+            request.status = "cancelled"
+            request.cancelled_at = now
+            self.leave_request_repo.update(request)
+
+        self.audit_repo.log(
+            actor_id=requesting_user_id,
+            table_name="leave_requests",
+            operation="UPDATE",
+            record_id=request.id,
+            before_data={"status": before_status},
+            after_data={"status": "cancelled"},
+            ip_address=ip_address,
+        )
+        self.db.commit()
+
+        return request
