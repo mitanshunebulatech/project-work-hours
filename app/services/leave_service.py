@@ -379,3 +379,91 @@ class LeaveService:
         self.db.commit()
 
         return request
+
+    def approve_request(
+        self,
+        *,
+        request_id: int,
+        admin_user_id: int,
+        admin_comment: str | None = None,
+        ip_address: str | None = None,
+    ) -> LeaveRequest:
+        """
+        - Idempotency guard: must currently be 'pending', else 409. Approving
+          an already-actioned request is a real conflict to surface to the
+          admin UI ("someone else already actioned this"), not a silent no-op.
+        - Self-approval prevention: an admin cannot approve their own request
+          (Phase 5's internal-controls gap — RBAC alone doesn't catch this).
+        - Balance is re-checked HERE, not just trusted from submission time —
+          time may have passed between submit and approve, and the balance
+          could have changed (another request approved in between, an admin
+          ledger adjustment, etc).
+        - The ledger debit + balance update + status change all happen in
+          the same transaction (one commit at the end) so they can never
+          drift out of sync from a partial failure.
+        """
+        request = self.leave_request_repo.get_with_relations(request_id)
+        if request is None:
+            raise NotFoundError("Leave request not found")
+
+        if request.status != "pending":
+            raise ConflictError(
+                f"This request is already {request.status}; it cannot be approved again"
+            )
+
+        if request.employee_id == admin_user_id:
+            raise ForbiddenError("You cannot approve your own leave request")
+
+        leave_type = self.leave_type_repo.get(request.leave_type_id)
+        if leave_type is None:
+            raise NotFoundError("Leave type for this request no longer exists")
+
+        if leave_type.is_paid:
+            policy = self.leave_policy_repo.get_for_type_year(
+                leave_type_id=leave_type.id, year=request.start_date.year
+            )
+            if policy is not None:
+                balance = self.leave_balance_repo.get_or_create_for_year(
+                    employee_id=request.employee_id,
+                    leave_type_id=leave_type.id,
+                    year=request.start_date.year,
+                )
+                if balance.remaining_days < request.working_days_count:
+                    raise BusinessRuleError(
+                        f"Insufficient balance at approval time: {balance.remaining_days} "
+                        f"day(s) remaining, {request.working_days_count} requested."
+                    )
+
+                self.leave_balance_repo.adjust_balance(
+                    balance, debit_delta=request.working_days_count
+                )
+                self.leave_ledger_repo.create(
+                    LeaveLedgerEntry(
+                        employee_id=request.employee_id,
+                        leave_type_id=leave_type.id,
+                        leave_request_id=request.id,
+                        transaction_type=LedgerTransactionType.LEAVE_DEBIT.value,
+                        amount_days=-request.working_days_count,
+                        reason=f"Leave request #{request.id} approved",
+                    )
+                )
+
+        before_status = request.status
+        request.status = "approved"
+        request.reviewed_by = admin_user_id
+        request.reviewed_at = datetime.now(timezone.utc)
+        request.admin_comment = admin_comment
+        self.leave_request_repo.update(request)
+
+        self.audit_repo.log(
+            actor_id=admin_user_id,
+            table_name="leave_requests",
+            operation="UPDATE",
+            record_id=request.id,
+            before_data={"status": before_status},
+            after_data={"status": "approved", "reviewed_by": admin_user_id},
+            ip_address=ip_address,
+        )
+        self.db.commit()
+
+        return request
