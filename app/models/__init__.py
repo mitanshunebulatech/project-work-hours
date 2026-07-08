@@ -10,6 +10,7 @@ from app.models.leave_ledger import LeaveLedgerEntry
 from app.models.leave_policy import LeavePolicy
 from app.models.leave_request import LeaveRequest
 from app.models.leave_type import LeaveType
+from app.models.notification import Notification
 from app.models.project import Project
 from app.models.refresh_token import RefreshToken
 from app.models.user import User
@@ -26,4 +27,5 @@ __all__ = [
     "LeaveBalance",
     "LeaveLedgerEntry",
     "LeaveRequest",
+    "Notification",
 ]
