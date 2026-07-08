@@ -5,6 +5,7 @@ before Alembic's env.py calls target_metadata for autogenerate.
 """
 
 from app.models.audit_log import AuditLog
+from app.models.holiday import Holiday
 from app.models.leave_balance import LeaveBalance
 from app.models.leave_ledger import LeaveLedgerEntry
 from app.models.leave_policy import LeavePolicy
@@ -22,6 +23,7 @@ __all__ = [
     "WorkEntry",
     "AuditLog",
     "RefreshToken",
+    "Holiday",
     "LeaveType",
     "LeavePolicy",
     "LeaveBalance",
