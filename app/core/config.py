@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # --- Rate limiting ---
     LOGIN_RATE_LIMIT: str = "10/minute"
 
+    # --- Scheduler ---
+    # Disable in tests / when running multiple instances (BackgroundScheduler runs
+    # in-process; a multi-instance deployment would need a distributed lock instead).
+    ENABLE_ANNUAL_GRANT_SCHEDULER: bool = True
+
     # --- NiceGUI ---
     UI_HOST: str = "0.0.0.0"
     UI_PORT: int = 8080

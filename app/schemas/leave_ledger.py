@@ -64,3 +64,10 @@ class LeaveBalanceResponse(BaseModel):
 class LedgerAdjustmentResponse(BaseModel):
     ledger_entry: LeaveLedgerEntryResponse
     balance: LeaveBalanceResponse
+
+
+class AnnualGrantRunResponse(BaseModel):
+    year: int
+    granted: int
+    skipped: int
+    errors: list[str]

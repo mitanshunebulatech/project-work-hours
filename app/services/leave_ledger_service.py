@@ -31,7 +31,7 @@ class LeaveLedgerService:
         self.audit_repo = AuditRepository(db)
 
     def create_adjustment(
-        self, payload: LedgerAdjustmentCreate, *, actor_id: int, ip_address: str | None
+        self, payload: LedgerAdjustmentCreate, *, actor_id: int | None, ip_address: str | None
     ) -> LedgerAdjustmentResponse:
         employee = self.user_repo.get(payload.employee_id)
         if employee is None or employee.deleted_at is not None:

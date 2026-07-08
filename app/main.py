@@ -6,7 +6,10 @@ translation boundary, keeping every other layer framework-agnostic.
 """
 
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -19,11 +22,42 @@ from app.core.config import settings
 from app.core.exceptions import AppError
 
 
+def _run_annual_grant_job() -> None:
+    """
+    Scheduler entrypoint — opens its own DB session since it runs outside any
+    HTTP request's Depends(get_db) lifecycle. Runs for the current calendar
+    year; idempotency (AnnualGrantService/has_annual_grant_for_year) means a
+    misfire or manual re-trigger the same day won't double-grant anyone.
+    """
+    from app.db.session import SessionLocal
+    from app.services.annual_grant_service import AnnualGrantService
+
+    db = SessionLocal()
+    try:
+        year = datetime.now(timezone.utc).year
+        AnnualGrantService(db).run(year=year)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: nothing to warm up in v1 (engine is created lazily on first query).
+    scheduler = BackgroundScheduler()
+    if settings.ENABLE_ANNUAL_GRANT_SCHEDULER:
+        # Fires once a year, just after midnight Jan 1, in the configured timezone.
+        scheduler.add_job(
+            _run_annual_grant_job,
+            trigger=CronTrigger(month=1, day=1, hour=0, minute=5),
+            id="annual_leave_grant",
+            replace_existing=True,
+        )
+        scheduler.start()
+    app.state.scheduler = scheduler
+
     yield
-    # Shutdown: dispose the connection pool cleanly.
+
+    # Shutdown: stop the scheduler and dispose the connection pool cleanly.
+    scheduler.shutdown(wait=False)
     from app.db.session import engine
 
     engine.dispose()

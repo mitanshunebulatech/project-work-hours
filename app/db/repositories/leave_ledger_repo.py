@@ -6,7 +6,7 @@ the ledger is append-only by design (see LeaveLedgerEntry's docstring).
 Only create() and read methods are exposed here.
 """
 
-from sqlalchemy import select
+from sqlalchemy import extract, func, select
 
 from app.models.leave_ledger import LeaveLedgerEntry
 
@@ -46,10 +46,24 @@ class LeaveLedgerRepository:
         calculation. Used to verify (or rebuild) leave_balances if the cache
         ever drifts; not used on the hot path (that's what the cache is for).
         """
-        from sqlalchemy import func
-
         stmt = select(func.coalesce(func.sum(LeaveLedgerEntry.amount_days), 0)).where(
             LeaveLedgerEntry.employee_id == employee_id,
             LeaveLedgerEntry.leave_type_id == leave_type_id,
         )
         return self.db.execute(stmt).scalar_one()
+
+    def has_annual_grant_for_year(self, *, employee_id: int, leave_type_id: int, year: int) -> bool:
+        """
+        Idempotency guard for the automatic yearly grant job (Task 19): checks
+        whether an 'annual_grant' entry already exists for this employee/type
+        within the given calendar year, based on created_at. Prevents double-
+        granting if the job is re-run for a year already processed.
+        """
+        stmt = select(func.count()).select_from(LeaveLedgerEntry).where(
+            LeaveLedgerEntry.employee_id == employee_id,
+            LeaveLedgerEntry.leave_type_id == leave_type_id,
+            LeaveLedgerEntry.transaction_type == "annual_grant",
+            extract("year", LeaveLedgerEntry.created_at) == year,
+        )
+        count = self.db.execute(stmt).scalar_one()
+        return count > 0
