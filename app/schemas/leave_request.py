@@ -74,3 +74,24 @@ class LeaveRequestResponse(BaseModel):
     attachment_path: str | None
     created_at: datetime
     cancelled_at: datetime | None
+
+
+class LeaveRejectRequest(BaseModel):
+    admin_comment: str = Field(min_length=3, max_length=2000)
+
+
+class BulkApproveRequest(BaseModel):
+    request_ids: list[int] = Field(min_length=1, max_length=200)
+    admin_comment: str | None = None
+
+
+class BulkApproveResultItem(BaseModel):
+    request_id: int
+    success: bool
+    detail: str | None = None
+
+
+class BulkApproveResponse(BaseModel):
+    results: list[BulkApproveResultItem]
+    approved_count: int
+    failed_count: int

@@ -35,13 +35,21 @@ from app.db.repositories.leave_ledger_repo import LeaveLedgerRepository
 from app.db.repositories.leave_policy_repo import LeavePolicyRepository
 from app.db.repositories.leave_request_repo import LeaveRequestRepository
 from app.db.repositories.leave_type_repo import LeaveTypeRepository
+from app.db.repositories.notification_repo import NotificationRepository
+from app.db.repositories.user_repo import UserRepository
 from app.models.leave_ledger import LeaveLedgerEntry
 from app.models.leave_request import LeaveRequest
 from app.models.leave_type import LeaveType
+from app.models.notification import Notification
 from app.schemas.leave_ledger import LedgerTransactionType
 from app.schemas.leave_request import LeavePreviewRequest, LeavePreviewResponse, LeaveRequestCreate
 
 WEEKEND_WEEKDAYS = {5, 6}  # Monday=0 ... Saturday=5, Sunday=6
+
+NOTIFICATION_TYPE_SUBMITTED = "leave_request_submitted"
+NOTIFICATION_TYPE_APPROVED = "leave_request_approved"
+NOTIFICATION_TYPE_REJECTED = "leave_request_rejected"
+NOTIFICATION_TYPE_CANCELLED = "leave_request_cancelled"
 
 
 class LeaveService:
@@ -54,6 +62,30 @@ class LeaveService:
         self.leave_ledger_repo = LeaveLedgerRepository(db)
         self.holiday_repo = HolidayRepository(db)
         self.audit_repo = AuditRepository(db)
+        self.notification_repo = NotificationRepository(db)
+        self.user_repo = UserRepository(db)
+
+    def _notify_admins(self, *, type_: str, reference_id: int, message: str) -> None:
+        """
+        Notifies every active admin — this codebase has no per-employee admin
+        assignment (no manager hierarchy), so a new/cancelled request is
+        broadcast to the whole admin pool, same flat structure RBAC already
+        assumes elsewhere (require_admin, not require_specific_manager).
+        """
+        admins, _ = self.user_repo.search(role="admin", is_active=True, limit=100)
+        for admin in admins:
+            self.notification_repo.create(
+                Notification(
+                    recipient_id=admin.id, type=type_, reference_id=reference_id, message=message
+                )
+            )
+
+    def _notify_employee(self, *, employee_id: int, type_: str, reference_id: int, message: str) -> None:
+        self.notification_repo.create(
+            Notification(
+                recipient_id=employee_id, type=type_, reference_id=reference_id, message=message
+            )
+        )
 
     def _get_active_leave_type(self, leave_type_id: int) -> LeaveType:
         leave_type = self.leave_type_repo.get(leave_type_id)
@@ -287,6 +319,15 @@ class LeaveService:
         )
         self.db.commit()
 
+        self._notify_admins(
+            type_=NOTIFICATION_TYPE_SUBMITTED,
+            reference_id=created.id,
+            message=(
+                f"New leave request #{created.id} submitted by employee #{employee_id} "
+                f"({payload.start_date} to {payload.end_date})"
+            ),
+        )
+
         return created
 
     def cancel_request(
@@ -367,16 +408,16 @@ class LeaveService:
             request.cancelled_at = now
             self.leave_request_repo.update(request)
 
-        self.audit_repo.log(
-            actor_id=requesting_user_id,
-            table_name="leave_requests",
-            operation="UPDATE",
-            record_id=request.id,
-            before_data={"status": before_status},
-            after_data={"status": "cancelled"},
-            ip_address=ip_address,
-        )
         self.db.commit()
+
+        self._notify_admins(
+            type_=NOTIFICATION_TYPE_CANCELLED,
+            reference_id=request.id,
+            message=(
+                f"Leave request #{request.id} (was {before_status}) was cancelled by "
+                f"{'an admin' if is_admin else 'the employee'}"
+            ),
+        )
 
         return request
 
@@ -465,5 +506,66 @@ class LeaveService:
             ip_address=ip_address,
         )
         self.db.commit()
+
+        self._notify_employee(
+            employee_id=request.employee_id,
+            type_=NOTIFICATION_TYPE_APPROVED,
+            reference_id=request.id,
+            message=f"Your leave request #{request.id} was approved",
+        )
+
+        return request
+
+    def reject_request(
+        self,
+        *,
+        request_id: int,
+        admin_user_id: int,
+        admin_comment: str,
+        ip_address: str | None = None,
+    ) -> LeaveRequest:
+        """
+        Mirrors approve_request()'s idempotency guard (must be pending) and
+        self-review prevention — same internal-controls reasoning applies:
+        an admin shouldn't be able to reject their own submitted request
+        either, even though it has no ledger effect. No ledger/balance write
+        happens at all here (BR-05 still applies: only approval ever debits).
+        """
+        request = self.leave_request_repo.get_with_relations(request_id)
+        if request is None:
+            raise NotFoundError("Leave request not found")
+
+        if request.status != "pending":
+            raise ConflictError(
+                f"This request is already {request.status}; it cannot be rejected"
+            )
+
+        if request.employee_id == admin_user_id:
+            raise ForbiddenError("You cannot reject your own leave request")
+
+        before_status = request.status
+        request.status = "rejected"
+        request.reviewed_by = admin_user_id
+        request.reviewed_at = datetime.now(timezone.utc)
+        request.admin_comment = admin_comment
+        self.leave_request_repo.update(request)
+
+        self.audit_repo.log(
+            actor_id=admin_user_id,
+            table_name="leave_requests",
+            operation="UPDATE",
+            record_id=request.id,
+            before_data={"status": before_status},
+            after_data={"status": "rejected", "reviewed_by": admin_user_id},
+            ip_address=ip_address,
+        )
+        self.db.commit()
+
+        self._notify_employee(
+            employee_id=request.employee_id,
+            type_=NOTIFICATION_TYPE_REJECTED,
+            reference_id=request.id,
+            message=f"Your leave request #{request.id} was rejected: {admin_comment}",
+        )
 
         return request
