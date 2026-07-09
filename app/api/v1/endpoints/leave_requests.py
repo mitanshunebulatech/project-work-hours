@@ -126,6 +126,8 @@ def list_requests(
 def list_pending(
     pagination: PageParams = Depends(),
     leave_type_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> PaginatedResponse[LeaveRequestResponse]:
@@ -134,6 +136,8 @@ def list_pending(
     items, total = service.leave_request_repo.search(
         status="pending",
         leave_type_id=leave_type_id,
+        date_from=date_from,
+        date_to=date_to,
         oldest_first=True,
         limit=pagination.size,
         offset=(pagination.page - 1) * pagination.size,

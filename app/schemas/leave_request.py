@@ -56,6 +56,18 @@ class LeaveRequestCreate(BaseModel):
         return self
 
 
+class EmployeeBrief(BaseModel):
+    """Minimal employee info attached to a leave request response, so admin
+    UIs (queue, history) can show a name instead of a bare employee_id.
+    Relies on LeaveRequest.employee being eager-loaded (joinedload) by the
+    repository — never triggers an extra N+1 query."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+
+
 class LeaveRequestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -74,6 +86,7 @@ class LeaveRequestResponse(BaseModel):
     attachment_path: str | None
     created_at: datetime
     cancelled_at: datetime | None
+    employee: EmployeeBrief | None = None
 
 
 class AttachmentUploadResponse(BaseModel):
