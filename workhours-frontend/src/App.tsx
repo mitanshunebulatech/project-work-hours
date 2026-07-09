@@ -9,6 +9,7 @@ import Login from '@/pages/Login'
 
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Timesheets = lazy(() => import('@/pages/Timesheets'))
+const Leave = lazy(() => import('@/pages/Leave'))
 const AdminEntries = lazy(() => import('@/pages/AdminEntries'))
 const AdminUsers = lazy(() => import('@/pages/AdminUsers'))
 const AdminProjects = lazy(() => import('@/pages/AdminProjects'))
@@ -59,6 +60,7 @@ function AppRoutes() {
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/timesheets" element={<Timesheets />} />
+                <Route path="/leave" element={<Leave />} />
                 <Route path="/admin/entries" element={<ProtectedRoute adminOnly><AdminEntries /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>} />
                 <Route path="/admin/projects" element={<ProtectedRoute adminOnly><AdminProjects /></ProtectedRoute>} />

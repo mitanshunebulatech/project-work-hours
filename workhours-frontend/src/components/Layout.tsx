@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme'
 import {
   Clock, LayoutDashboard, Users, FolderOpen,
   BarChart3, Shield, LogOut, ChevronLeft, ChevronRight,
-  Search, Bell, Moon, Sun, Settings, User as UserIcon, Command
+  Search, Bell, Moon, Sun, Settings, User as UserIcon, Command, Plane
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ReactNode, useState } from 'react'
@@ -20,6 +20,7 @@ interface NavItem { label: string; to: string; icon: ReactNode; adminOnly?: bool
 const navItems: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', icon: <LayoutDashboard size={18} /> },
   { label: 'My Timesheets', to: '/timesheets', icon: <Clock size={18} /> },
+  { label: 'Leave', to: '/leave', icon: <Plane size={18} /> },
   { label: 'Entries', to: '/admin/entries', icon: <Clock size={18} />, adminOnly: true },
   { label: 'Users', to: '/admin/users', icon: <Users size={18} />, adminOnly: true },
   { label: 'Projects', to: '/admin/projects', icon: <FolderOpen size={18} />, adminOnly: true },
@@ -30,6 +31,7 @@ const navItems: NavItem[] = [
 const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/timesheets': 'My Timesheets',
+  '/leave': 'Leave',
   '/admin/entries': 'Entries',
   '/admin/users': 'Users',
   '/admin/projects': 'Projects',

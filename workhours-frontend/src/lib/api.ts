@@ -70,3 +70,81 @@ export const updateUser = (id: number, data: object) => api.patch(`/users/${id}`
 // Reports
 export const getReportSummary = (params?: object) => api.get('/reports/summary', { params })
 export const getAuditLogs = (params?: object) => api.get('/audit', { params })
+
+// --- Leave Types ---
+export const getLeaveTypes = (includeInactive = false) =>
+  api.get('/leave-types', { params: { include_inactive: includeInactive } })
+
+// --- Leave Balances ---
+export const getMyLeaveBalances = (year?: number) =>
+  api.get('/leave-balances/me', { params: year ? { year } : undefined })
+export const getEmployeeLeaveBalances = (employeeId: number, year?: number) =>
+  api.get(`/leave-balances/employee/${employeeId}`, { params: year ? { year } : undefined })
+
+// --- Leave Requests ---
+export const previewLeaveRequest = (data: {
+  leave_type_id: number; start_date: string; end_date: string; is_half_day?: boolean
+}) => api.post('/leave-requests/preview', data)
+
+export const createLeaveRequest = (data: {
+  leave_type_id: number; start_date: string; end_date: string
+  is_half_day?: boolean; reason: string; attachment_path?: string | null
+}) => api.post('/leave-requests', data)
+
+export const uploadLeaveAttachment = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/leave-requests/attachments', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+export const downloadLeaveAttachment = (requestId: number) =>
+  api.get(`/leave-requests/${requestId}/attachment`, { responseType: 'blob' })
+
+export const getMyLeaveRequests = (params?: object) => api.get('/leave-requests', { params })
+
+export const getPendingLeaveRequests = (params?: object) =>
+  api.get('/leave-requests/pending', { params })
+
+export const getEmployeeLeaveHistory = (employeeId: number, params?: object) =>
+  api.get(`/leave-requests/employee/${employeeId}`, { params })
+
+export const cancelLeaveRequest = (id: number) => api.post(`/leave-requests/${id}/cancel`)
+
+export const approveLeaveRequest = (id: number, adminComment?: string) =>
+  api.post(`/leave-requests/${id}/approve`, null, { params: adminComment ? { admin_comment: adminComment } : undefined })
+
+export const rejectLeaveRequest = (id: number, adminComment: string) =>
+  api.post(`/leave-requests/${id}/reject`, { admin_comment: adminComment })
+
+export const bulkApproveLeaveRequests = (requestIds: number[], adminComment?: string) =>
+  api.post('/leave-requests/bulk-approve', { request_ids: requestIds, admin_comment: adminComment })
+
+export const getLeaveCalendar = (month: number, year: number) =>
+  api.get('/leave-requests/calendar', { params: { month, year } })
+
+export const getLeaveStatistics = (params?: object) =>
+  api.get('/leave-requests/statistics', { params })
+
+export const exportLeaveRequestsCsv = (params?: object) =>
+  api.get('/leave-requests/export', { params, responseType: 'blob' })
+
+// --- Leave Ledger ---
+export const getEmployeeLedger = (employeeId: number, params?: object) =>
+  api.get(`/leave-ledger/${employeeId}`, { params })
+export const createLedgerAdjustment = (data: object) => api.post('/leave-ledger/adjustments', data)
+export const runAnnualGrant = (year: number) =>
+  api.post('/leave-ledger/annual-grant/run', null, { params: { year } })
+
+// --- Notifications ---
+export const getMyNotifications = (params?: object) => api.get('/notifications/me', { params })
+export const getUnreadNotificationCount = () => api.get('/notifications/me/unread-count')
+export const markNotificationRead = (id: number) => api.patch(`/notifications/${id}/read`)
+export const markAllNotificationsRead = () => api.patch('/notifications/mark-all-read')
+
+// --- Holidays ---
+export const getHolidays = (params?: object) => api.get('/holidays', { params })
+export const createHoliday = (data: object) => api.post('/holidays', data)
+export const updateHoliday = (id: number, data: object) => api.patch(`/holidays/${id}`, data)
+export const deactivateHoliday = (id: number) => api.post(`/holidays/${id}/deactivate`)
