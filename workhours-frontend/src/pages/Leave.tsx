@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { DateRange } from 'react-day-picker'
 import { useToast } from '@/hooks/useToast'
 import {
@@ -48,6 +48,7 @@ export default function Leave() {
   const [attachmentPath, setAttachmentPath] = useState<string | null>(null)
   const [attachmentName, setAttachmentName] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [preview, setPreview] = useState<any>(null)
   const [previewing, setPreviewing] = useState(false)
@@ -275,25 +276,30 @@ export default function Leave() {
                   </button>
                 </div>
               ) : (
-                /* FIX: previously used Button asChild wrapping a <span> that
-                   contained the <input>. Radix Slot requires exactly ONE
-                   child element, and Button's internal loading-state markup
-                   plus that <span> meant Slot received more than one child,
-                   throwing "Slot failed to slot onto its children" on mount.
-                   Fix: drop asChild entirely — render a normal Button and put
-                   the hidden file input as a sibling inside the <label>. The
-                   <label> already forwards clicks to the input for free. */
-                <label className="inline-flex">
-                  <Button size="sm" variant="outline" type="button" loading={uploading}>
+                /* FIX (real root cause): a <label> associates with the FIRST
+                   labelable descendant in DOM order — and <button> is itself
+                   labelable. Wrapping Button + a hidden <input type="file">
+                   in a <label> meant the label bound to the visible button
+                   (which was already what got clicked), never forwarding to
+                   the file input at all — so clicking did nothing. The
+                   earlier "fix" only addressed a separate Slot/asChild crash,
+                   not this. Real fix: no label at all — trigger the hidden
+                   input directly via ref on the button's onClick. */
+                <>
+                  <Button
+                    size="sm" variant="outline" type="button" loading={uploading}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
                     <Paperclip size={14} /> {uploading ? 'Uploading…' : 'Attach file'}
                   </Button>
                   <input
+                    ref={fileInputRef}
                     type="file"
                     className="hidden"
                     accept=".pdf,.jpg,.jpeg,.png,.docx"
                     onChange={handleAttachmentChange}
                   />
-                </label>
+                </>
               )}
               <p className="text-xs text-muted-foreground/70">PDF, JPG, PNG, or DOCX — max 10MB</p>
             </div>
