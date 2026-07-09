@@ -3,6 +3,7 @@ app/db/repositories/leave_balance_repo.py
 """
 
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 
 from app.db.repositories.base import BaseRepository
 from app.models.leave_balance import LeaveBalance
@@ -48,9 +49,13 @@ class LeaveBalanceRepository(BaseRepository[LeaveBalance]):
         return self.create(new_balance)
 
     def list_for_employee(self, *, employee_id: int, year: int) -> list[LeaveBalance]:
-        stmt = select(LeaveBalance).where(
-            LeaveBalance.employee_id == employee_id,
-            LeaveBalance.year == year,
+        stmt = (
+            select(LeaveBalance)
+            .options(joinedload(LeaveBalance.leave_type))
+            .where(
+                LeaveBalance.employee_id == employee_id,
+                LeaveBalance.year == year,
+            )
         )
         return list(self.db.execute(stmt).scalars().all())
 
