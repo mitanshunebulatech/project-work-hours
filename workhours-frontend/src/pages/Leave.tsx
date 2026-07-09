@@ -275,13 +275,24 @@ export default function Leave() {
                   </button>
                 </div>
               ) : (
+                /* FIX: previously used Button asChild wrapping a <span> that
+                   contained the <input>. Radix Slot requires exactly ONE
+                   child element, and Button's internal loading-state markup
+                   plus that <span> meant Slot received more than one child,
+                   throwing "Slot failed to slot onto its children" on mount.
+                   Fix: drop asChild entirely — render a normal Button and put
+                   the hidden file input as a sibling inside the <label>. The
+                   <label> already forwards clicks to the input for free. */
                 <label className="inline-flex">
-                  <Button size="sm" variant="outline" type="button" loading={uploading} asChild>
-                    <span>
-                      <Paperclip size={14} /> {uploading ? 'Uploading…' : 'Attach file'}
-                      <input type="file" className="hidden" accept=".pdf,.jpg,.jpeg,.png,.docx" onChange={handleAttachmentChange} />
-                    </span>
+                  <Button size="sm" variant="outline" type="button" loading={uploading}>
+                    <Paperclip size={14} /> {uploading ? 'Uploading…' : 'Attach file'}
                   </Button>
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.jpg,.jpeg,.png,.docx"
+                    onChange={handleAttachmentChange}
+                  />
                 </label>
               )}
               <p className="text-xs text-muted-foreground/70">PDF, JPG, PNG, or DOCX — max 10MB</p>
