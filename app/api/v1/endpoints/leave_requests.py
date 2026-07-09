@@ -4,8 +4,8 @@ app/api/v1/endpoints/leave_requests.py
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_client_ip, get_current_user, require_admin, require_any_role
@@ -13,6 +13,7 @@ from app.db.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse, PaginatedResponse
 from app.schemas.leave_request import (
+    AttachmentUploadResponse,
     BulkApproveRequest,
     BulkApproveResponse,
     BulkApproveResultItem,
@@ -50,6 +51,38 @@ def create_request(
         employee_id=current_user.id, payload=payload, ip_address=get_client_ip(request)
     )
     return LeaveRequestResponse.model_validate(created)
+
+
+@router.post(
+    "/attachments", response_model=AttachmentUploadResponse, dependencies=[Depends(require_any_role)]
+)
+def upload_attachment(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+) -> AttachmentUploadResponse:
+    """
+    Standalone upload step — call this first, then pass the returned
+    attachment_path into POST /leave-requests. Kept separate from
+    create_request (which stays plain JSON) rather than making the whole
+    submission endpoint multipart.
+    """
+    attachment_path = LeaveService(db).upload_attachment(file)
+    return AttachmentUploadResponse(attachment_path=attachment_path)
+
+
+@router.get("/{request_id}/attachment")
+def download_attachment(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    """Only the request's own employee or an admin may fetch the file — never a public URL."""
+    file_path = LeaveService(db).get_attachment_path(
+        request_id=request_id,
+        requesting_user_id=current_user.id,
+        is_admin=current_user.role == "admin",
+    )
+    return FileResponse(file_path)
 
 
 @router.get("", response_model=PaginatedResponse[LeaveRequestResponse])

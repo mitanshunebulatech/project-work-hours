@@ -49,6 +49,13 @@ class Settings(BaseSettings):
     UI_PORT: int = 8080
     API_BASE_URL: str = "http://localhost:8000/api/v1"
 
+    # --- Leave request attachments ---
+    # Stored outside anything served statically — retrieval only happens through
+    # the authenticated /leave-requests/{id}/attachment endpoint, never a direct URL.
+    UPLOAD_DIR: str = "uploads/leave_attachments"
+    MAX_ATTACHMENT_SIZE_MB: int = 10
+    ALLOWED_ATTACHMENT_EXTENSIONS: list[str] = [".pdf", ".jpg", ".jpeg", ".png", ".docx"]
+
 
 @lru_cache
 def get_settings() -> Settings:

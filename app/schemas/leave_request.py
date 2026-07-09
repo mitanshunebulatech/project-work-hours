@@ -76,6 +76,13 @@ class LeaveRequestResponse(BaseModel):
     cancelled_at: datetime | None
 
 
+class AttachmentUploadResponse(BaseModel):
+    """Returned by POST /leave-requests/attachments — pass attachment_path
+    straight into LeaveRequestCreate.attachment_path on the follow-up submit."""
+
+    attachment_path: str
+
+
 class LeaveRejectRequest(BaseModel):
     admin_comment: str = Field(min_length=3, max_length=2000)
 

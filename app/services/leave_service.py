@@ -44,6 +44,7 @@ from app.models.notification import Notification
 from app.schemas.leave_ledger import LedgerTransactionType
 from app.schemas.leave_request import LeavePreviewRequest, LeavePreviewResponse, LeaveRequestCreate
 from app.utils.csv_export import leave_requests_to_csv
+from app.utils.file_storage import resolve_attachment_path, save_attachment_file
 
 WEEKEND_WEEKDAYS = {5, 6}  # Monday=0 ... Saturday=5, Sunday=6
 
@@ -330,6 +331,27 @@ class LeaveService:
         )
 
         return created
+
+    def upload_attachment(self, file) -> str:
+        """Validates and saves a leave-request attachment, returning the
+        relative path to pass into LeaveRequestCreate.attachment_path."""
+        return save_attachment_file(file)
+
+    def get_attachment_path(self, *, request_id: int, requesting_user_id: int, is_admin: bool):
+        """
+        Returns the absolute filesystem path for a request's attachment,
+        after confirming the caller is the request's own employee or an
+        admin (same ownership rule used by cancel_request).
+        """
+        leave_request = self.leave_request_repo.get(request_id)
+        if leave_request is None:
+            raise NotFoundError("Leave request not found")
+        if not is_admin and leave_request.employee_id != requesting_user_id:
+            raise ForbiddenError("You cannot access another employee's attachment")
+        if not leave_request.attachment_path:
+            raise NotFoundError("This leave request has no attachment")
+
+        return resolve_attachment_path(leave_request.attachment_path)
 
     def cancel_request(
         self,
