@@ -8,8 +8,8 @@ BR-01: working_days_count excludes weekends (Sat/Sun) and active company
 BR-02: a half-day request must be a single-day range (enforced at the
        schema level too — this is defense in depth).
 BR-03: balance/attachment checks only apply when the leave type is paid
-       AND has a policy row for the relevant year (LOP and WFH have
-       neither, by design — see migration 0013's docstring).
+       AND has a policy row for the relevant year (LOP has neither, by
+       design — see migration 0013's docstring).
 BR-04: preview_request() NEVER raises on business-rule violations — it
        reports them as warnings. Only create_request() turns these same
        checks into hard failures.
@@ -20,6 +20,13 @@ BR-05: create_request() writes NO ledger/balance changes at all — a
        real enforcement happens, matching Phase 3's admin-approval design.
 BR-06: no overlapping pending/approved request for the same employee is
        allowed — checked against LeaveRequestRepository.find_overlapping().
+BR-07: GLOBAL_MAX_CONSECUTIVE_DAYS is a hard, company-wide ceiling on
+       working_days_count that applies to every leave type unconditionally
+       — including types with no policy row at all (e.g. LOP) and as a
+       backstop even for types whose own policy allows more. A type's own
+       policy.max_consecutive_days can be stricter than this (e.g. Casual
+       Leave's 3, Birthday's 1) but can never effectively raise the ceiling
+       above GLOBAL_MAX_CONSECUTIVE_DAYS.
 """
 
 from datetime import date, datetime, timedelta, timezone
@@ -47,6 +54,11 @@ from app.utils.csv_export import leave_requests_to_csv
 from app.utils.file_storage import resolve_attachment_path, save_attachment_file
 
 WEEKEND_WEEKDAYS = {5, 6}  # Monday=0 ... Saturday=5, Sunday=6
+
+# BR-07: company-wide hard ceiling, independent of per-type policy rows.
+# Applies to every leave type, including ones with no policy row (e.g. LOP)
+# and acts as a backstop even for a type whose own policy allows more.
+GLOBAL_MAX_CONSECUTIVE_DAYS = 7
 
 NOTIFICATION_TYPE_SUBMITTED = "leave_request_submitted"
 NOTIFICATION_TYPE_APPROVED = "leave_request_approved"
@@ -149,6 +161,14 @@ class LeaveService:
                 "The selected date range contains no working days (all weekends/holidays)."
             )
 
+        # BR-07: unconditional global cap, checked regardless of whether this
+        # leave type has a policy row at all.
+        if working_days_count > GLOBAL_MAX_CONSECUTIVE_DAYS:
+            warnings.append(
+                f"This request exceeds the company-wide maximum of "
+                f"{GLOBAL_MAX_CONSECUTIVE_DAYS} consecutive working day(s)."
+            )
+
         attachment_required = (
             leave_type.requires_attachment_after_days is not None
             and working_days_count > leave_type.requires_attachment_after_days
@@ -238,6 +258,15 @@ class LeaveService:
         if working_days_count == 0:
             raise BusinessRuleError(
                 "The selected date range contains no working days (all weekends/holidays)."
+            )
+
+        # BR-07: unconditional global cap — applies even to leave types with
+        # no policy row (e.g. LOP), and acts as a hard backstop regardless of
+        # what a type's own policy allows.
+        if working_days_count > GLOBAL_MAX_CONSECUTIVE_DAYS:
+            raise BusinessRuleError(
+                f"Leave requests cannot exceed {GLOBAL_MAX_CONSECUTIVE_DAYS} consecutive "
+                f"working day(s), company-wide."
             )
 
         # --- BR-06: conflict detection, same employee only ---
