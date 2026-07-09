@@ -48,7 +48,9 @@ class LeaveRequestRepository(BaseRepository[LeaveRequest]):
         boundary as WorkEntryRepository.search().
         """
         stmt = select(LeaveRequest).options(
-            joinedload(LeaveRequest.employee), joinedload(LeaveRequest.leave_type)
+            joinedload(LeaveRequest.employee),
+            joinedload(LeaveRequest.leave_type),
+            joinedload(LeaveRequest.reviewer),
         )
         count_stmt = select(func.count()).select_from(LeaveRequest)
 
@@ -127,3 +129,63 @@ class LeaveRequestRepository(BaseRepository[LeaveRequest]):
             )
         )
         return list(self.db.execute(stmt).unique().scalars().all())
+
+    def aggregate_statistics(
+        self,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        leave_type_id: int | None = None,
+    ) -> dict:
+        """
+        Statistics reflect APPROVED leave only (actual usage), same
+        philosophy as the calendar view — pending/rejected requests aren't
+        "leave taken" and would skew a usage report. Filters apply against
+        start_date, matching get_calendar_entries' own date semantics.
+        """
+        base_conditions = [LeaveRequest.status == "approved"]
+        if date_from is not None:
+            base_conditions.append(LeaveRequest.start_date >= date_from)
+        if date_to is not None:
+            base_conditions.append(LeaveRequest.start_date <= date_to)
+        if leave_type_id is not None:
+            base_conditions.append(LeaveRequest.leave_type_id == leave_type_id)
+
+        totals_stmt = select(
+            func.coalesce(func.sum(LeaveRequest.working_days_count), 0),
+            func.count(LeaveRequest.id),
+        )
+        for cond in base_conditions:
+            totals_stmt = totals_stmt.where(cond)
+        total_days, total_requests = self.db.execute(totals_stmt).one()
+
+        by_employee_stmt = (
+            select(User.username, func.coalesce(func.sum(LeaveRequest.working_days_count), 0))
+            .join(User, LeaveRequest.employee_id == User.id)
+            .group_by(User.username)
+            .order_by(func.sum(LeaveRequest.working_days_count).desc())
+        )
+        for cond in base_conditions:
+            by_employee_stmt = by_employee_stmt.where(cond)
+        by_employee = self.db.execute(by_employee_stmt).all()
+
+        by_leave_type_stmt = (
+            select(LeaveType.code, func.coalesce(func.sum(LeaveRequest.working_days_count), 0))
+            .join(LeaveType, LeaveRequest.leave_type_id == LeaveType.id)
+            .group_by(LeaveType.code)
+            .order_by(func.sum(LeaveRequest.working_days_count).desc())
+        )
+        for cond in base_conditions:
+            by_leave_type_stmt = by_leave_type_stmt.where(cond)
+        by_leave_type = self.db.execute(by_leave_type_stmt).all()
+
+        return {
+            "total_days": total_days,
+            "total_requests": total_requests,
+            "by_employee": [
+                {"employee_username": username, "total_days": days} for username, days in by_employee
+            ],
+            "by_leave_type": [
+                {"leave_type_code": code, "total_days": days} for code, days in by_leave_type
+            ],
+        }

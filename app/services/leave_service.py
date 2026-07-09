@@ -43,6 +43,7 @@ from app.models.leave_type import LeaveType
 from app.models.notification import Notification
 from app.schemas.leave_ledger import LedgerTransactionType
 from app.schemas.leave_request import LeavePreviewRequest, LeavePreviewResponse, LeaveRequestCreate
+from app.utils.csv_export import leave_requests_to_csv
 
 WEEKEND_WEEKDAYS = {5, 6}  # Monday=0 ... Saturday=5, Sunday=6
 
@@ -569,3 +570,40 @@ class LeaveService:
         )
 
         return request
+
+    def get_calendar(self, *, month: int, year: int) -> list[LeaveRequest]:
+        """Thin pass-through — the query logic itself lives in the repository."""
+        return self.leave_request_repo.get_calendar_entries(month=month, year=year)
+
+    def get_statistics(
+        self,
+        *,
+        date_from: date | None = None,
+        date_to: date | None = None,
+        leave_type_id: int | None = None,
+    ) -> dict:
+        return self.leave_request_repo.aggregate_statistics(
+            date_from=date_from, date_to=date_to, leave_type_id=leave_type_id
+        )
+
+    def export_requests_csv(
+        self,
+        *,
+        status: str | None = None,
+        leave_type_id: int | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> str:
+        # No pagination for export — same "pull everything matching filters"
+        # approach as ReportService.export_csv; a real production system
+        # would stream this in chunks for very large datasets.
+        items, _ = self.leave_request_repo.search(
+            employee_id=None,  # admin-only export, always org-wide
+            status=status,
+            leave_type_id=leave_type_id,
+            date_from=date_from,
+            date_to=date_to,
+            limit=100_000,
+            offset=0,
+        )
+        return leave_requests_to_csv(items)

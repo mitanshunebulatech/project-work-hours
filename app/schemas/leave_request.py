@@ -95,3 +95,28 @@ class BulkApproveResponse(BaseModel):
     results: list[BulkApproveResultItem]
     approved_count: int
     failed_count: int
+
+
+class LeaveCalendarEntryResponse(BaseModel):
+    employee_username: str
+    leave_type_code: str
+    leave_type_display_name: str
+    start_date: date
+    end_date: date
+
+
+class EmployeeLeaveDaysSummary(BaseModel):
+    employee_username: str
+    total_days: Decimal
+
+
+class LeaveTypeDaysSummary(BaseModel):
+    leave_type_code: str
+    total_days: Decimal
+
+
+class LeaveStatisticsResponse(BaseModel):
+    total_requests: int
+    total_days: Decimal
+    by_employee: list[EmployeeLeaveDaysSummary]
+    by_leave_type: list[LeaveTypeDaysSummary]

@@ -5,6 +5,7 @@ app/api/v1/endpoints/leave_requests.py
 from datetime import date
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_client_ip, get_current_user, require_admin, require_any_role
@@ -15,11 +16,13 @@ from app.schemas.leave_request import (
     BulkApproveRequest,
     BulkApproveResponse,
     BulkApproveResultItem,
+    LeaveCalendarEntryResponse,
     LeavePreviewRequest,
     LeavePreviewResponse,
     LeaveRejectRequest,
     LeaveRequestCreate,
     LeaveRequestResponse,
+    LeaveStatisticsResponse,
 )
 from app.services.leave_service import LeaveService
 from app.utils.pagination import PageParams
@@ -218,4 +221,63 @@ def bulk_approve(
 
     return BulkApproveResponse(
         results=results, approved_count=approved_count, failed_count=failed_count
+    )
+
+
+@router.get("/calendar", response_model=list[LeaveCalendarEntryResponse])
+def calendar(
+    month: int,
+    year: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[LeaveCalendarEntryResponse]:
+    """
+    Approved-only, org-wide. Deliberately visible to any authenticated user
+    (not admin-only) — an employee's pending request never appears here
+    (see LeaveRequestRepository.get_calendar_entries' status filter), so
+    there's no privacy leak in showing who's confirmed to be out.
+    """
+    entries = LeaveService(db).get_calendar(month=month, year=year)
+    return [
+        LeaveCalendarEntryResponse(
+            employee_username=e.employee.username,
+            leave_type_code=e.leave_type.code,
+            leave_type_display_name=e.leave_type.display_name,
+            start_date=e.start_date,
+            end_date=e.end_date,
+        )
+        for e in entries
+    ]
+
+
+@router.get(
+    "/statistics", response_model=LeaveStatisticsResponse, dependencies=[Depends(require_admin)]
+)
+def statistics(
+    date_from: date | None = None,
+    date_to: date | None = None,
+    leave_type_id: int | None = None,
+    db: Session = Depends(get_db),
+) -> LeaveStatisticsResponse:
+    data = LeaveService(db).get_statistics(
+        date_from=date_from, date_to=date_to, leave_type_id=leave_type_id
+    )
+    return LeaveStatisticsResponse(**data)
+
+
+@router.get("/export", dependencies=[Depends(require_admin)])
+def export_csv(
+    status: str | None = None,
+    leave_type_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    csv_content = LeaveService(db).export_requests_csv(
+        status=status, leave_type_id=leave_type_id, date_from=date_from, date_to=date_to
+    )
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=leave_requests_export.csv"},
     )
