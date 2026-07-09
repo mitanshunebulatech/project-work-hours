@@ -5,7 +5,7 @@ import { useTheme } from '@/hooks/useTheme'
 import {
   Clock, LayoutDashboard, Users, FolderOpen,
   BarChart3, Shield, LogOut, ChevronLeft, ChevronRight,
-  Search, Bell, Moon, Sun, Settings, User as UserIcon, Command, Plane
+  Search, Moon, Sun, Settings, User as UserIcon, Command, Plane, CalendarCheck, CalendarDays
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ReactNode, useState } from 'react'
@@ -14,6 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
+import NotificationBell from '@/components/NotificationBell'
 
 interface NavItem { label: string; to: string; icon: ReactNode; adminOnly?: boolean }
 
@@ -22,6 +23,8 @@ const navItems: NavItem[] = [
   { label: 'My Timesheets', to: '/timesheets', icon: <Clock size={18} /> },
   { label: 'Leave', to: '/leave', icon: <Plane size={18} /> },
   { label: 'Entries', to: '/admin/entries', icon: <Clock size={18} />, adminOnly: true },
+  { label: 'Leave Approvals', to: '/admin/leave', icon: <CalendarCheck size={18} />, adminOnly: true },
+  { label: 'Leave Calendar', to: '/admin/leave-calendar', icon: <CalendarDays size={18} />, adminOnly: true },
   { label: 'Users', to: '/admin/users', icon: <Users size={18} />, adminOnly: true },
   { label: 'Projects', to: '/admin/projects', icon: <FolderOpen size={18} />, adminOnly: true },
   { label: 'Reports', to: '/admin/reports', icon: <BarChart3 size={18} />, adminOnly: true },
@@ -33,6 +36,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/timesheets': 'My Timesheets',
   '/leave': 'Leave',
   '/admin/entries': 'Entries',
+  '/admin/leave': 'Leave Approvals',
+  '/admin/leave-calendar': 'Leave Calendar',
   '/admin/users': 'Users',
   '/admin/projects': 'Projects',
   '/admin/reports': 'Reports',
@@ -164,14 +169,8 @@ export default function Layout({ children }: { children: ReactNode }) {
             >
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-            <button
-              className="relative h-9 w-9 flex items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
-              onClick={() => toast('No new notifications', 'info')}
-              title="Notifications"
-            >
-              <Bell size={16} />
-              <span className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-nebula-500 animate-pulse-ring" />
-            </button>
+
+            <NotificationBell />
 
             <DropdownMenu>
               <DropdownMenuTrigger className="ml-1.5 flex items-center gap-2 rounded-md p-1 pr-2 hover:bg-muted transition-colors outline-none">
