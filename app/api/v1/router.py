@@ -8,6 +8,8 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     audit,
     auth,
+    departments,
+    employees,
     entries,
     holidays,
     leave_balances,
@@ -36,3 +38,5 @@ api_router.include_router(leave_requests.router)
 api_router.include_router(leave_types.router)
 api_router.include_router(leave_balances.router)
 api_router.include_router(notifications.router)
+api_router.include_router(departments.router)
+api_router.include_router(employees.router)

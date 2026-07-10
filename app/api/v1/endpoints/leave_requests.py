@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_client_ip, get_current_user, require_admin, require_any_role
+from app.core.deps import get_client_ip, get_current_user, require_any_role, require_permission
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -122,16 +122,21 @@ def list_requests(
     )
 
 
-@router.get("/pending", response_model=PaginatedResponse[LeaveRequestResponse])
+@router.get(
+    "/pending",
+    response_model=PaginatedResponse[LeaveRequestResponse],
+    dependencies=[Depends(require_permission("leave_requests:approve"))],
+)
 def list_pending(
     pagination: PageParams = Depends(),
     leave_type_id: int | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
 ) -> PaginatedResponse[LeaveRequestResponse]:
-    """Admin triage queue — oldest-pending-first (see LeaveRequestRepository.search's oldest_first)."""
+    """Approval-queue triage — oldest-pending-first (see LeaveRequestRepository.search's oldest_first).
+    Gated on leave_requests:approve (not view_all): this is a to-do list for
+    whoever approves leave, not a general reporting view."""
     service = LeaveService(db)
     items, total = service.leave_request_repo.search(
         status="pending",
@@ -150,13 +155,16 @@ def list_pending(
     )
 
 
-@router.get("/employee/{employee_id}", response_model=PaginatedResponse[LeaveRequestResponse])
+@router.get(
+    "/employee/{employee_id}",
+    response_model=PaginatedResponse[LeaveRequestResponse],
+    dependencies=[Depends(require_permission("leave_requests:view_all"))],
+)
 def employee_history(
     employee_id: int,
     pagination: PageParams = Depends(),
     status: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
 ) -> PaginatedResponse[LeaveRequestResponse]:
     service = LeaveService(db)
     items, total = service.leave_request_repo.search(
@@ -195,7 +203,7 @@ def approve_request(
     request: Request,
     admin_comment: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("leave_requests:approve")),
 ) -> LeaveRequestResponse:
     approved = LeaveService(db).approve_request(
         request_id=request_id,
@@ -212,7 +220,7 @@ def reject_request(
     payload: LeaveRejectRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("leave_requests:approve")),
 ) -> LeaveRequestResponse:
     rejected = LeaveService(db).reject_request(
         request_id=request_id,
@@ -228,7 +236,7 @@ def bulk_approve(
     payload: BulkApproveRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("leave_requests:approve")),
 ) -> BulkApproveResponse:
     """
     Best-effort loop: one request's failure (already actioned, self-approval,
@@ -288,7 +296,9 @@ def calendar(
 
 
 @router.get(
-    "/statistics", response_model=LeaveStatisticsResponse, dependencies=[Depends(require_admin)]
+    "/statistics",
+    response_model=LeaveStatisticsResponse,
+    dependencies=[Depends(require_permission("leave_requests:view_all"))],
 )
 def statistics(
     date_from: date | None = None,
@@ -302,7 +312,7 @@ def statistics(
     return LeaveStatisticsResponse(**data)
 
 
-@router.get("/export", dependencies=[Depends(require_admin)])
+@router.get("/export", dependencies=[Depends(require_permission("leave_requests:view_all"))])
 def export_csv(
     status: str | None = None,
     leave_type_id: int | None = None,

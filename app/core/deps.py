@@ -14,6 +14,7 @@ from jose import JWTError
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ForbiddenError, UnauthorizedError
+from app.core.permissions import ALL_PERMISSION_CODES, EMPLOYEE_PERMISSION_CODES
 from app.core.security import decode_token
 from app.db.repositories.user_repo import UserRepository
 from app.db.session import get_db
@@ -65,6 +66,44 @@ def require_role(*allowed_roles: str) -> Callable[[User], User]:
     def _checker(current_user: User = Depends(get_current_user)) -> User:
         if current_user.role not in allowed_roles:
             raise ForbiddenError(f"Requires one of roles: {', '.join(allowed_roles)}")
+        return current_user
+
+    return _checker
+
+
+def user_permission_codes(user: User) -> set[str]:
+    """
+    Resolves the effective set of permission codes for a user.
+
+    If role_id has been backfilled (Sprint 1 migration 0020) and points at a
+    real Role, permissions come from the DB via Role.permissions — this is
+    the long-term path once every user has been migrated off the legacy
+    string role.
+
+    If role_id is still NULL (not yet backfilled), falls back to the same
+    permission codes the seeded system roles (0018) grant for that legacy
+    role string, so access is identical to what the user would get the
+    moment a backfill script runs — no silent gain or loss of access here.
+    """
+    if user.role_id is not None and user.role_ref is not None:
+        return {p.code for p in user.role_ref.permissions}
+    return set(ALL_PERMISSION_CODES) if user.role == "admin" else set(EMPLOYEE_PERMISSION_CODES)
+
+
+def require_permission(*required_codes: str) -> Callable[[User], User]:
+    """
+    Usage: Depends(require_permission("leave_requests:approve"))
+
+    Fine-grained alternative to require_role, for cases Sprint 1 introduced
+    real granularity for (approve vs view_all vs manage). Existing
+    require_admin / require_any_role gates are intentionally left alone
+    elsewhere — this is additive, not a wholesale replacement.
+    """
+
+    def _checker(current_user: User = Depends(get_current_user)) -> User:
+        user_codes = user_permission_codes(current_user)
+        if not set(required_codes).issubset(user_codes):
+            raise ForbiddenError(f"Requires permission(s): {', '.join(required_codes)}")
         return current_user
 
     return _checker
