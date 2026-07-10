@@ -54,6 +54,15 @@ def _build_test_metadata() -> MetaData:
     Base.metadata.tables["projects"].to_metadata(test_metadata)
     Base.metadata.tables["work_entries"].to_metadata(test_metadata)
 
+    # Sprint 2: departments and employee_profiles, needed for
+    # DepartmentService / EmployeeProfileService integration tests.
+    # employee_profiles.pan_number uses EncryptedString (a TypeDecorator over
+    # String(255)) — to_metadata() preserves the column's declared type as-is,
+    # and SQLite renders the underlying String impl fine, so no stand-in
+    # table is needed here the way audit_logs needs one for JSONB/INET.
+    Base.metadata.tables["departments"].to_metadata(test_metadata)
+    Base.metadata.tables["employee_profiles"].to_metadata(test_metadata)
+
     # Stand-in audit_logs: same shape as app/models/audit_log.py, with
     # SQLite-compatible types swapped in for JSONB/INET only.
     Table(
