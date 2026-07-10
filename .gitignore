@@ -16,3 +16,7 @@ htmlcov/
 *.sqlite3
 workhours-frontend.backup/
 uploads/
+
+workhours-frontend/dist/
+workhours-frontend/node_modules/
+*.tsbuildinfo
