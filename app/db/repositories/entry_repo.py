@@ -24,15 +24,26 @@ class WorkEntryRepository(BaseRepository[WorkEntry]):
         )
         return self.db.execute(stmt).scalar_one_or_none()
 
-    def get_by_employee_project_date(
-        self, employee_id: int, project_id: int, entry_date: date
-    ) -> WorkEntry | None:
-        stmt = select(WorkEntry).where(
+    def get_timed_entries_for_day(
+        self, employee_id: int, entry_date: date, *, exclude_entry_id: int | None = None
+    ) -> list[WorkEntry]:
+        """
+        All of this employee's entries on this date that have both
+        start_time and end_time set (untimed legacy-style entries can't be
+        overlap-checked and are excluded). Used by EntryService to enforce
+        that a new/updated time-block doesn't overlap an existing one,
+        across any project — an employee can't work two things at once.
+        """
+        conditions = [
             WorkEntry.employee_id == employee_id,
-            WorkEntry.project_id == project_id,
             WorkEntry.entry_date == entry_date,
-        )
-        return self.db.execute(stmt).scalar_one_or_none()
+            WorkEntry.start_time.is_not(None),
+            WorkEntry.end_time.is_not(None),
+        ]
+        if exclude_entry_id is not None:
+            conditions.append(WorkEntry.id != exclude_entry_id)
+        stmt = select(WorkEntry).where(*conditions)
+        return list(self.db.execute(stmt).scalars().all())
 
     def search(
         self,
@@ -87,6 +98,33 @@ class WorkEntryRepository(BaseRepository[WorkEntry]):
         stmt = stmt.order_by(WorkEntry.entry_date.desc(), WorkEntry.id.desc()).limit(limit).offset(offset)
         items = list(self.db.execute(stmt).unique().scalars().all())
         return items, total
+
+    def search_all_for_export(
+        self,
+        *,
+        employee_id: int | None = None,
+        project_id: int | None = None,
+        status: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> list[WorkEntry]:
+        """Unpaginated variant of search(), for CSV export."""
+        stmt = select(WorkEntry).options(joinedload(WorkEntry.employee), joinedload(WorkEntry.project))
+        conditions = []
+        if employee_id is not None:
+            conditions.append(WorkEntry.employee_id == employee_id)
+        if project_id is not None:
+            conditions.append(WorkEntry.project_id == project_id)
+        if status is not None:
+            conditions.append(WorkEntry.status == status)
+        if date_from is not None:
+            conditions.append(WorkEntry.entry_date >= date_from)
+        if date_to is not None:
+            conditions.append(WorkEntry.entry_date <= date_to)
+        for cond in conditions:
+            stmt = stmt.where(cond)
+        stmt = stmt.order_by(WorkEntry.entry_date.desc(), WorkEntry.id.desc())
+        return list(self.db.execute(stmt).unique().scalars().all())
 
     def aggregate_summary(
         self,

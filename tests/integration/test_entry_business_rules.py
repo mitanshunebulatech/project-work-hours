@@ -1,7 +1,8 @@
 """
 tests/integration/test_entry_business_rules.py
-Closes two of the three gaps named in Document 11 (Testing Strategy) §11.7:
-  1. Duplicate-entry 409 path — previously manually verified only.
+Closes gaps named in Document 11 (Testing Strategy) §11.7:
+  1. Overlap-rejection 409 path (Sprint 3, replaces the old duplicate-entry
+     check now that BR-01 allows multiple time-blocks per project per day).
   2. Role-scoping (employee A cannot see employee B's entries) — previously
      verified by code review of EntryService.list_entries only.
 
@@ -9,7 +10,7 @@ These run against a real SQLite-backed Session (see conftest.py), exercising
 the actual EntryService + WorkEntryRepository + SQLAlchemy stack, not a mock.
 """
 
-from datetime import date
+from datetime import date, time
 from decimal import Decimal
 
 import pytest
@@ -22,42 +23,80 @@ from app.schemas.entry import WorkEntryCreate
 from app.services.entry_service import EntryService
 
 
-def test_duplicate_entry_raises_conflict_error(
+def test_overlapping_entries_raise_conflict_error(
     db_session: Session, seeded_users: dict[str, User], seeded_project: Project
 ) -> None:
-    """BR-01: one entry per employee+project+day. Second identical submission must be rejected."""
+    """BR-01 (Sprint 3): an employee's time-blocks may not overlap on a given day."""
     service = EntryService(db_session)
     alice = seeded_users["alice"]
 
     payload = WorkEntryCreate(
         project_id=seeded_project.id,
         entry_date=date.today(),
-        hours_worked=Decimal("8"),
-        remarks="First submission",
+        start_time=time(9, 0),
+        end_time=time(12, 0),
+        hours_worked=Decimal("3"),
+        remarks="First block",
     )
-
     first = service.create_entry(payload, current_user=alice, ip_address="127.0.0.1")
     assert first.status == "pending"
-    assert first.hours_worked == Decimal("8")
 
-    duplicate_payload = WorkEntryCreate(
+    overlapping_payload = WorkEntryCreate(
         project_id=seeded_project.id,
         entry_date=date.today(),
-        hours_worked=Decimal("4"),  # different hours, same employee+project+date — still a duplicate
-        remarks="Attempted second submission",
+        start_time=time(11, 0),  # overlaps the 9-12 block
+        end_time=time(14, 0),
+        hours_worked=Decimal("3"),
+        remarks="Overlapping block",
     )
 
     with pytest.raises(ConflictError) as exc_info:
-        service.create_entry(duplicate_payload, current_user=alice, ip_address="127.0.0.1")
+        service.create_entry(overlapping_payload, current_user=alice, ip_address="127.0.0.1")
 
     assert exc_info.value.status_code == 409
-    assert "already exists" in exc_info.value.detail.lower()
+    assert "overlap" in exc_info.value.detail.lower()
 
 
-def test_different_project_same_day_is_allowed(
+def test_non_overlapping_blocks_same_project_same_day_allowed(
     db_session: Session, seeded_users: dict[str, User], seeded_project: Project
 ) -> None:
-    """Sanity check on the other side of BR-01: the constraint is per-project, not per-day globally."""
+    """Sprint 3: multiple time-blocks against the SAME project on the SAME day are now allowed,
+    as long as their times don't overlap — this is the behavior BR-01 was relaxed to support."""
+    service = EntryService(db_session)
+    alice = seeded_users["alice"]
+
+    service.create_entry(
+        WorkEntryCreate(
+            project_id=seeded_project.id,
+            entry_date=date.today(),
+            start_time=time(9, 0),
+            end_time=time(12, 0),
+            hours_worked=Decimal("3"),
+        ),
+        current_user=alice,
+        ip_address="127.0.0.1",
+    )
+    # Same employee, same project, same date, non-overlapping time — must succeed, not raise.
+    second_entry = service.create_entry(
+        WorkEntryCreate(
+            project_id=seeded_project.id,
+            entry_date=date.today(),
+            start_time=time(13, 0),
+            end_time=time(17, 0),
+            hours_worked=Decimal("4"),
+        ),
+        current_user=alice,
+        ip_address="127.0.0.1",
+    )
+    assert second_entry.project_id == seeded_project.id
+    assert second_entry.start_time == time(13, 0)
+
+
+def test_different_project_overlapping_time_still_raises_conflict(
+    db_session: Session, seeded_users: dict[str, User], seeded_project: Project
+) -> None:
+    """The overlap check is per-employee-per-day across ALL projects, not per-project —
+    an employee can't be logged against two different projects at the same time."""
     service = EntryService(db_session)
     alice = seeded_users["alice"]
 
@@ -66,17 +105,29 @@ def test_different_project_same_day_is_allowed(
     db_session.commit()
 
     service.create_entry(
-        WorkEntryCreate(project_id=seeded_project.id, entry_date=date.today(), hours_worked=Decimal("4")),
+        WorkEntryCreate(
+            project_id=seeded_project.id,
+            entry_date=date.today(),
+            start_time=time(9, 0),
+            end_time=time(12, 0),
+            hours_worked=Decimal("3"),
+        ),
         current_user=alice,
         ip_address="127.0.0.1",
     )
-    # Same employee, same date, DIFFERENT project — must succeed, not raise.
-    second_entry = service.create_entry(
-        WorkEntryCreate(project_id=second_project.id, entry_date=date.today(), hours_worked=Decimal("4")),
-        current_user=alice,
-        ip_address="127.0.0.1",
-    )
-    assert second_entry.project_id == second_project.id
+
+    with pytest.raises(ConflictError):
+        service.create_entry(
+            WorkEntryCreate(
+                project_id=second_project.id,
+                entry_date=date.today(),
+                start_time=time(10, 0),  # overlaps the first block, different project
+                end_time=time(13, 0),
+                hours_worked=Decimal("3"),
+            ),
+            current_user=alice,
+            ip_address="127.0.0.1",
+        )
 
 
 def test_employee_cannot_see_another_employees_entries(
@@ -92,12 +143,24 @@ def test_employee_cannot_see_another_employees_entries(
     bob = seeded_users["bob"]
 
     service.create_entry(
-        WorkEntryCreate(project_id=seeded_project.id, entry_date=date.today(), hours_worked=Decimal("6")),
+        WorkEntryCreate(
+            project_id=seeded_project.id,
+            entry_date=date.today(),
+            start_time=time(9, 0),
+            end_time=time(15, 0),
+            hours_worked=Decimal("6"),
+        ),
         current_user=alice,
         ip_address="127.0.0.1",
     )
     service.create_entry(
-        WorkEntryCreate(project_id=seeded_project.id, entry_date=date.today(), hours_worked=Decimal("7")),
+        WorkEntryCreate(
+            project_id=seeded_project.id,
+            entry_date=date.today(),
+            start_time=time(9, 0),
+            end_time=time(16, 0),
+            hours_worked=Decimal("7"),
+        ),
         current_user=bob,
         ip_address="127.0.0.1",
     )
@@ -136,7 +199,13 @@ def test_employee_cannot_bypass_scoping_by_passing_another_employee_id(
     bob = seeded_users["bob"]
 
     service.create_entry(
-        WorkEntryCreate(project_id=seeded_project.id, entry_date=date.today(), hours_worked=Decimal("6")),
+        WorkEntryCreate(
+            project_id=seeded_project.id,
+            entry_date=date.today(),
+            start_time=time(9, 0),
+            end_time=time(15, 0),
+            hours_worked=Decimal("6"),
+        ),
         current_user=alice,
         ip_address="127.0.0.1",
     )
@@ -176,12 +245,24 @@ def test_admin_can_see_all_employees_entries(
     db_session.commit()
 
     service.create_entry(
-        WorkEntryCreate(project_id=seeded_project.id, entry_date=date.today(), hours_worked=Decimal("5")),
+        WorkEntryCreate(
+            project_id=seeded_project.id,
+            entry_date=date.today(),
+            start_time=time(9, 0),
+            end_time=time(14, 0),
+            hours_worked=Decimal("5"),
+        ),
         current_user=alice,
         ip_address="127.0.0.1",
     )
     service.create_entry(
-        WorkEntryCreate(project_id=seeded_project.id, entry_date=date.today(), hours_worked=Decimal("3")),
+        WorkEntryCreate(
+            project_id=seeded_project.id,
+            entry_date=date.today(),
+            start_time=time(9, 0),
+            end_time=time(12, 0),
+            hours_worked=Decimal("3"),
+        ),
         current_user=bob,
         ip_address="127.0.0.1",
     )
