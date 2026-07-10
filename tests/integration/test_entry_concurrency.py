@@ -1,22 +1,36 @@
 """
 tests/integration/test_entry_concurrency.py
-Closes the third gap named in Document 11 (Testing Strategy) §11.7:
-verifying the uq_employee_project_date unique constraint is actually
-present and enforced by the database — not just by the application-level
-pre-check in EntryService.create_entry.
+Closes the third gap named in Document 11 (Testing Strategy) §11.7.
+
+Sprint 3 update: uq_employee_project_date (the DB-level unique constraint)
+was intentionally dropped in migration 0022 to allow multiple time-blocks
+per project per day. The old test that proved that constraint was
+DB-enforced no longer applies — it's replaced below with a test that
+confirms the constraint is actually gone (two rows for the same
+employee+project+date now insert successfully at the DB level), plus a
+test that the still-active chk_hours_range CHECK constraint remains
+DB-enforced.
+
+Known gap, called out explicitly rather than silently left out: the
+Sprint-3 overlap rule (no two of an employee's time-blocks may overlap on
+a given day) is enforced only at the application layer (EntryService.
+_enforce_no_overlap does a SELECT-then-compare in Python) — there is no
+DB-level constraint equivalent to the old UNIQUE constraint backing it. In
+a genuine race (two concurrent requests both passing the overlap check
+before either commits), two overlapping entries could both be persisted.
+A PostgreSQL EXCLUDE USING gist constraint on (employee_id, daterange/
+timerange) would close this at the DB level if it becomes a real-world
+concern; it isn't implemented here because it needs careful column-type
+work (tsrange over entry_date+start_time/end_time) that's a bigger, separate
+task from this sprint's scope. Flagging so it isn't mistaken for something
+already covered.
 
 Design note on the original threading approach: a threading.Barrier-based
 test was originally written and passed on its own, but failed when run
 inside the full pytest suite because SQLite's shared-cache in-memory mode
 still serializes writes (the second thread blocks on the first's commit
-rather than truly racing). This is a SQLite limitation unrelated to the
-constraint's correctness. The meaningful assertion — "if two rows for the
-same employee+project+date somehow reach the INSERT stage simultaneously,
-does the DB actually reject the second one?" — is better answered by
-bypassing the application pre-check directly via raw SQL and asserting
-IntegrityError, rather than relying on thread-timing precision that
-SQLite can't faithfully reproduce. PostgreSQL in CI would validate the
-full concurrent-request scenario.
+rather than truly racing). This is a SQLite limitation unrelated to
+constraint correctness generally.
 """
 
 from datetime import date
@@ -71,14 +85,12 @@ def _build_test_engine():
     return engine
 
 
-def test_unique_constraint_enforced_by_database_independent_of_application_precheck() -> None:
+def test_duplicate_employee_project_date_no_longer_constrained_at_db_level() -> None:
     """
-    Proves the uq_employee_project_date constraint is a real database-level
-    guarantee, not just an application-level convention: bypasses
-    EntryService's pre-check SELECT entirely and attempts two raw INSERTs
-    for the same (employee, project, date). The second must raise
-    IntegrityError from the database itself, proving the constraint exists
-    and is enforced at the layer that actually matters during a race.
+    Sprint 3: confirms uq_employee_project_date is actually gone from the
+    schema, not just from the ORM model — two raw INSERTs for the same
+    (employee, project, date) triple must both succeed now, since multiple
+    time-blocks per project per day are intentionally allowed.
     """
     engine = _build_test_engine()
     SessionFactory = sessionmaker(bind=engine, autocommit=False, autoflush=False)
@@ -93,7 +105,6 @@ def test_unique_constraint_enforced_by_database_independent_of_application_prech
 
     target_date = date.today()
 
-    # First INSERT — must succeed (simulates the winning thread in a race)
     s1 = SessionFactory()
     first = WorkEntry(
         employee_id=employee_id,
@@ -106,33 +117,20 @@ def test_unique_constraint_enforced_by_database_independent_of_application_prech
     s1.commit()
     s1.close()
 
-    # Second INSERT for the same (employee, project, date) — must raise
-    # IntegrityError from the database's UNIQUE constraint, NOT from any
-    # application-level check (none is run here).
+    # Second INSERT for the same (employee, project, date) triple — must now
+    # succeed, since uq_employee_project_date was dropped in migration 0022.
     s2 = SessionFactory()
     second = WorkEntry(
         employee_id=employee_id,
         project_id=project_id,
         entry_date=target_date,
-        hours_worked=Decimal("4"),  # different hours — constraint is on the triple, not hours
+        hours_worked=Decimal("4"),
         status="pending",
     )
     s2.add(second)
-
-    with pytest.raises(IntegrityError) as exc_info:
-        s2.commit()
-
-    s2.rollback()
+    s2.commit()  # must NOT raise
     s2.close()
 
-    assert (
-        "uq_employee_project_date" in str(exc_info.value).lower() or "unique" in str(exc_info.value).lower()
-    ), (
-        "IntegrityError raised but doesn't mention the expected unique constraint — "
-        "check the constraint is correctly named in the migration."
-    )
-
-    # Final confirmation: exactly one row in the database, not two
     verify = SessionFactory()
     count = (
         verify.query(WorkEntry)
@@ -140,7 +138,7 @@ def test_unique_constraint_enforced_by_database_independent_of_application_prech
         .count()
     )
     verify.close()
-    assert count == 1, f"Expected exactly 1 row after constraint violation, found {count}"
+    assert count == 2, f"Expected 2 rows (constraint intentionally dropped), found {count}"
 
     engine.dispose()
 
@@ -175,10 +173,6 @@ def test_hours_check_constraint_enforced_by_database() -> None:
 
     try:
         session.commit()
-        # If we reach here, SQLite silently accepted hours=0 without enforcing
-        # the CHECK constraint (possible on very old SQLite builds). This is
-        # not a test failure per se — it's an environment observation — but
-        # we log it explicitly so it's visible in CI output rather than silent.
         session.rollback()
         import warnings
 

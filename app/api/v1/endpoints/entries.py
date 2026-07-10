@@ -5,6 +5,7 @@ app/api/v1/endpoints/entries.py
 from datetime import date
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_client_ip, get_current_user, require_admin
@@ -15,6 +16,7 @@ from app.schemas.entry import (
     RejectRequest,
     WorkEntryCreate,
     WorkEntryResponse,
+    WorkEntrySummaryResponse,
     WorkEntryUpdate,
 )
 from app.services.entry_service import EntryService
@@ -106,4 +108,50 @@ def reject_entry(
 ) -> WorkEntryResponse:
     return EntryService(db).reject_entry(
         entry_id, payload.reason, current_user=current_user, ip_address=get_client_ip(request)
+    )
+
+
+@router.get("/summary", response_model=WorkEntrySummaryResponse)
+def summary(
+    employee_id: int | None = None,
+    project_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> WorkEntrySummaryResponse:
+    """
+    Aggregated hours totals (overall, by employee, by project). Employees
+    are scoped to their own totals the same way list_entries scopes them;
+    admins can pass employee_id/project_id to narrow, or omit for org-wide.
+    """
+    return EntryService(db).get_summary(
+        current_user=current_user,
+        employee_id=employee_id,
+        project_id=project_id,
+        date_from=date_from,
+        date_to=date_to,
+    )
+
+
+@router.get("/export", dependencies=[Depends(require_admin)])
+def export_csv(
+    employee_id: int | None = None,
+    project_id: int | None = None,
+    status: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    csv_content = EntryService(db).export_entries_csv(
+        employee_id=employee_id,
+        project_id=project_id,
+        status=status,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return StreamingResponse(
+        iter([csv_content]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=work_entries_export.csv"},
     )

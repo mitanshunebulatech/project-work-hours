@@ -2,7 +2,7 @@
 app/models/work_entry.py
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import (
@@ -14,7 +14,7 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
+    Time,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -25,7 +25,12 @@ from app.db.base import Base
 class WorkEntry(Base):
     __tablename__ = "work_entries"
     __table_args__ = (
-        UniqueConstraint("employee_id", "project_id", "entry_date", name="uq_employee_project_date"),
+        # Sprint 3: uq_employee_project_date (BR-01, one entry per employee+
+        # project+day) was dropped in migration 0022. Multiple time-blocks
+        # against the same project on the same day are now allowed;
+        # non-overlap across the employee's whole day is enforced in
+        # EntryService instead, since it needs to compare against every
+        # project the employee logged that day, not just this one.
         CheckConstraint("hours_worked > 0 AND hours_worked <= 24", name="chk_hours_range"),
         Index("idx_entries_employee_date", "employee_id", "entry_date"),
         Index("idx_entries_project", "project_id"),
@@ -38,6 +43,12 @@ class WorkEntry(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), nullable=False)
     entry_date: Mapped[date] = mapped_column(Date, nullable=False)
     hours_worked: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    # Nullable: legacy rows (pre-Sprint-3) only ever recorded hours_worked and
+    # were never backfilled with fabricated times. New entries are expected
+    # to always supply both (enforced at the schema layer, not the DB layer,
+    # so historical rows remain valid).
+    start_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    end_time: Mapped[time | None] = mapped_column(Time, nullable=True)
     remarks: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
 
