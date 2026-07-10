@@ -48,6 +48,8 @@ from app.models.work_entry import WorkEntry
 def _build_test_engine():
     """Separate in-memory SQLite engine for concurrency tests."""
     test_metadata = MetaData()
+    # roles must be cloned too — users.role_id carries an FK to roles.id (Sprint 1).
+    Base.metadata.tables["roles"].to_metadata(test_metadata)
     Base.metadata.tables["users"].to_metadata(test_metadata)
     Base.metadata.tables["projects"].to_metadata(test_metadata)
     Base.metadata.tables["work_entries"].to_metadata(test_metadata)

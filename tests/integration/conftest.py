@@ -47,7 +47,9 @@ from app.models.user import User
 def _build_test_metadata() -> MetaData:
     test_metadata = MetaData()
 
-    # Clone the three portable tables as-is from production metadata.
+    # Clone the portable tables as-is from production metadata. roles must be
+    # cloned too — users.role_id carries an FK to roles.id (Sprint 1).
+    Base.metadata.tables["roles"].to_metadata(test_metadata)
     Base.metadata.tables["users"].to_metadata(test_metadata)
     Base.metadata.tables["projects"].to_metadata(test_metadata)
     Base.metadata.tables["work_entries"].to_metadata(test_metadata)

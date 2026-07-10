@@ -44,10 +44,9 @@ class Settings(BaseSettings):
     # in-process; a multi-instance deployment would need a distributed lock instead).
     ENABLE_ANNUAL_GRANT_SCHEDULER: bool = True
 
-    # --- NiceGUI ---
-    UI_HOST: str = "0.0.0.0"
-    UI_PORT: int = 8080
-    API_BASE_URL: str = "http://localhost:8000/api/v1"
+    # --- Field-level encryption (Sprint 1: encrypted PAN on employee_profiles) ---
+    # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+    FIELD_ENCRYPTION_KEY: str = "CHANGE_ME_GENERATE_A_FERNET_KEY_IN_PRODUCTION"
 
     # --- Leave request attachments ---
     # Stored outside anything served statically — retrieval only happens through
