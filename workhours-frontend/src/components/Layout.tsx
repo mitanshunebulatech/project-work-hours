@@ -5,7 +5,8 @@ import { useTheme } from '@/hooks/useTheme'
 import {
   Clock, LayoutDashboard, Users, FolderOpen,
   BarChart3, Shield, LogOut, ChevronLeft, ChevronRight,
-  Search, Moon, Sun, Settings, User as UserIcon, Command, Plane, CalendarCheck, CalendarDays
+  Search, Moon, Sun, Settings, User as UserIcon, Command, Plane, CalendarCheck, CalendarDays,
+  Building2, Users2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ReactNode, useState } from 'react'
@@ -26,6 +27,8 @@ const navItems: NavItem[] = [
   { label: 'Leave Approvals', to: '/admin/leave', icon: <CalendarCheck size={18} />, adminOnly: true },
   { label: 'Leave Calendar', to: '/admin/leave-calendar', icon: <CalendarDays size={18} />, adminOnly: true },
   { label: 'Users', to: '/admin/users', icon: <Users size={18} />, adminOnly: true },
+  { label: 'Departments', to: '/admin/departments', icon: <Building2 size={18} />, adminOnly: true },
+  { label: 'Employees', to: '/admin/employees', icon: <Users2 size={18} />, adminOnly: true },
   { label: 'Projects', to: '/admin/projects', icon: <FolderOpen size={18} />, adminOnly: true },
   { label: 'Reports', to: '/admin/reports', icon: <BarChart3 size={18} />, adminOnly: true },
   { label: 'Audit Log', to: '/admin/audit', icon: <Shield size={18} />, adminOnly: true },
@@ -35,10 +38,13 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/timesheets': 'My Timesheets',
   '/leave': 'Leave',
+  '/profile': 'My Profile',
   '/admin/entries': 'Entries',
   '/admin/leave': 'Leave Approvals',
   '/admin/leave-calendar': 'Leave Calendar',
   '/admin/users': 'Users',
+  '/admin/departments': 'Departments',
+  '/admin/employees': 'Employees',
   '/admin/projects': 'Projects',
   '/admin/reports': 'Reports',
   '/admin/audit': 'Audit Log',
@@ -183,7 +189,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                   <p className="font-normal text-muted-foreground capitalize">{user?.role}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => toast('Profile settings coming soon', 'info')}>
+                <DropdownMenuItem onClick={() => navigate('/profile')}>
                   <UserIcon size={14} /> Profile
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => toast('Settings coming soon', 'info')}>
