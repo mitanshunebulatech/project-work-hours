@@ -10,8 +10,11 @@ import Login from '@/pages/Login'
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Timesheets = lazy(() => import('@/pages/Timesheets'))
 const Leave = lazy(() => import('@/pages/Leave'))
+const Profile = lazy(() => import('@/pages/Profile'))
 const AdminEntries = lazy(() => import('@/pages/AdminEntries'))
 const AdminUsers = lazy(() => import('@/pages/AdminUsers'))
+const AdminDepartments = lazy(() => import('@/pages/AdminDepartments'))
+const AdminEmployees = lazy(() => import('@/pages/AdminEmployees'))
 const AdminProjects = lazy(() => import('@/pages/AdminProjects'))
 const AdminReports = lazy(() => import('@/pages/AdminReports'))
 const AdminAudit = lazy(() => import('@/pages/AdminAudit'))
@@ -63,10 +66,13 @@ function AppRoutes() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/timesheets" element={<Timesheets />} />
                 <Route path="/leave" element={<Leave />} />
+                <Route path="/profile" element={<Profile />} />
                 <Route path="/admin/entries" element={<ProtectedRoute adminOnly><AdminEntries /></ProtectedRoute>} />
                 <Route path="/admin/leave" element={<ProtectedRoute adminOnly><AdminLeaveQueue /></ProtectedRoute>} />
                 <Route path="/admin/leave-calendar" element={<ProtectedRoute adminOnly><LeaveCalendar /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>} />
+                <Route path="/admin/departments" element={<ProtectedRoute adminOnly><AdminDepartments /></ProtectedRoute>} />
+                <Route path="/admin/employees" element={<ProtectedRoute adminOnly><AdminEmployees /></ProtectedRoute>} />
                 <Route path="/admin/projects" element={<ProtectedRoute adminOnly><AdminProjects /></ProtectedRoute>} />
                 <Route path="/admin/reports" element={<ProtectedRoute adminOnly><AdminReports /></ProtectedRoute>} />
                 <Route path="/admin/audit" element={<ProtectedRoute adminOnly><AdminAudit /></ProtectedRoute>} />

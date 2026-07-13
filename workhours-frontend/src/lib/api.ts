@@ -46,6 +46,11 @@ export const changePassword = (current_password: string, new_password: string) =
 
 // Profile
 export const getProfile = () => api.get('/profile/me')
+export const updateProfile = (data: {
+  phone_number?: string | null
+  date_of_birth?: string | null
+  pan_number?: string | null
+}) => api.patch('/profile/me', data)
 
 // Projects
 export const getProjects = (params?: object) => api.get('/projects', { params })
@@ -148,3 +153,39 @@ export const getHolidays = (params?: object) => api.get('/holidays', { params })
 export const createHoliday = (data: object) => api.post('/holidays', data)
 export const updateHoliday = (id: number, data: object) => api.patch(`/holidays/${id}`, data)
 export const deactivateHoliday = (id: number) => api.post(`/holidays/${id}/deactivate`)
+
+// --- Departments ---
+export const getDepartments = (params?: object) => api.get('/departments', { params })
+export const createDepartment = (data: { name: string; description?: string | null }) =>
+  api.post('/departments', data)
+export const updateDepartment = (
+  id: number,
+  data: { name?: string; description?: string | null; is_active?: boolean }
+) => api.patch(`/departments/${id}`, data)
+export const deactivateDepartment = (id: number) => api.delete(`/departments/${id}`)
+
+// --- Employees (admin-facing employee profile management) ---
+export const getEmployees = (params?: object) => api.get('/employees', { params })
+export const getEmployee = (profileId: number) => api.get(`/employees/${profileId}`)
+export const createEmployeeProfile = (data: {
+  user_id: number
+  full_name: string
+  department_id?: number | null
+  date_of_birth?: string | null
+  date_of_joining?: string | null
+  phone_number?: string | null
+  designation?: string | null
+  pan_number?: string | null
+}) => api.post('/employees', data)
+export const updateEmployeeProfile = (
+  profileId: number,
+  data: {
+    full_name?: string
+    department_id?: number | null
+    date_of_birth?: string | null
+    date_of_joining?: string | null
+    phone_number?: string | null
+    designation?: string | null
+    pan_number?: string | null
+  }
+) => api.patch(`/employees/${profileId}`, data)
