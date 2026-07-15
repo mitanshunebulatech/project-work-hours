@@ -2,16 +2,18 @@ import { useEffect, useState } from 'react'
 import { useToast } from '@/hooks/useToast'
 import {
   getLeaveTypes, getPendingLeaveRequests, approveLeaveRequest, rejectLeaveRequest,
-  bulkApproveLeaveRequests, getEmployeeLeaveHistory, getLeaveStatistics, exportLeaveRequestsCsv,
-  downloadLeaveAttachment
+  bulkApproveLeaveRequests, getEmployeeLeaveHistory, getEmployeeLeaveBalances,
+  exportLeaveRequestsCsv, downloadLeaveAttachment
 } from '@/lib/api'
-import { Card, CardContent, CardHeader, CardTitle, Badge, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Textarea } from '@/components/ui/misc'
+import { Card, CardContent, CardHeader, CardTitle, Badge, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/misc'
 import { Button } from '@/components/ui/button'
-import { TableSkeleton, CardGridSkeleton } from '@/components/ui/skeleton'
+import { TableSkeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import LeaveCalendarWidget from '@/components/LeaveCalendarWidget'
 import {
-  RefreshCw, Check, X, Paperclip, Download, ClipboardList,
-  Search, Download as DownloadIcon, Users, BarChart3
+  RefreshCw, Check, X, Paperclip, ClipboardList,
+  Download as DownloadIcon, Eye, Wallet, History, CalendarClock, PieChart
 } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 
@@ -19,18 +21,17 @@ const STATUS_VARIANT: Record<string, any> = {
   pending: 'pending', approved: 'success', rejected: 'destructive', cancelled: 'secondary'
 }
 
+// PM req #4: status values render in title case regardless of the raw
+// lowercase value the API returns (pending/approved/rejected/cancelled).
+const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+
 export default function AdminLeaveQueue() {
   const { toast } = useToast()
 
   const [loading, setLoading] = useState(true)
   const [leaveTypes, setLeaveTypes] = useState<any[]>([])
   const [requests, setRequests] = useState<any[]>([])
-  const [stats, setStats] = useState<any>(null)
 
-  // Filters — leave_type_id and date_from/date_to are all now real backend
-  // params on /leave-requests/pending. There is still no "all requests, any
-  // status" endpoint — only /leave-requests/pending (fixed to pending) — so
-  // this filters *within* pending, not across all statuses.
   const [filterLeaveTypeId, setFilterLeaveTypeId] = useState('')
   const [filterDateFrom, setFilterDateFrom] = useState('')
   const [filterDateTo, setFilterDateTo] = useState('')
@@ -39,16 +40,19 @@ export default function AdminLeaveQueue() {
   const [bulkComment, setBulkComment] = useState('')
   const [bulkSubmitting, setBulkSubmitting] = useState(false)
 
-  const [approvingId, setApprovingId] = useState<number | null>(null)
-  const [approveComment, setApproveComment] = useState('')
-  const [rejectingId, setRejectingId] = useState<number | null>(null)
-  const [rejectComment, setRejectComment] = useState('')
-  const [rowSubmitting, setRowSubmitting] = useState<number | null>(null)
+  // Confirmation dialog state — a real modal now (PM req #3), not an
+  // inline expand-row. `action` distinguishes which one is open;
+  // `comment` is required for reject, optional for approve.
+  const [confirmAction, setConfirmAction] = useState<{ id: number; type: 'approve' | 'reject' } | null>(null)
+  const [confirmComment, setConfirmComment] = useState('')
+  const [confirmSubmitting, setConfirmSubmitting] = useState(false)
 
-  const [historyOpen, setHistoryOpen] = useState(false)
-  const [historyEmployeeId, setHistoryEmployeeId] = useState('')
-  const [historyResults, setHistoryResults] = useState<any[] | null>(null)
-  const [historyLoading, setHistoryLoading] = useState(false)
+  // Wallet popup state (PM req #3 — replaces the old generic
+  // employee-ID-lookup panel entirely; each row now has its own Eye icon).
+  const [walletEmployee, setWalletEmployee] = useState<{ id: number; label: string } | null>(null)
+  const [walletLoading, setWalletLoading] = useState(false)
+  const [walletBalances, setWalletBalances] = useState<any[] | null>(null)
+  const [walletHistory, setWalletHistory] = useState<any[] | null>(null)
 
   const [exporting, setExporting] = useState(false)
 
@@ -69,15 +73,15 @@ export default function AdminLeaveQueue() {
   const load = async () => {
     setLoading(true)
     try {
-      const [typesRes, pendingRes, statsRes] = await Promise.all([
+      const [typesRes, pendingRes] = await Promise.all([
         getLeaveTypes(),
         getPendingLeaveRequests(buildFilterParams()),
-        getLeaveStatistics(buildFilterParams()).catch(() => ({ data: null })) // stats view is a bonus, don't block the queue if it 404s
       ])
       setLeaveTypes(typesRes.data)
+      // Backend now sorts latest-first by default (PM req #3) — no client
+      // re-sort needed, just render in the order the API returns.
       const items = Array.isArray(pendingRes.data) ? pendingRes.data : (pendingRes.data?.items ?? [])
       setRequests(items)
-      setStats(statsRes.data)
       setSelected(new Set())
     } finally {
       setLoading(false)
@@ -99,36 +103,32 @@ export default function AdminLeaveQueue() {
     setSelected(prev => (prev.size === requests.length ? new Set() : new Set(requests.map(r => r.id))))
   }
 
-  const handleApprove = async (id: number) => {
-    setRowSubmitting(id)
-    try {
-      await approveLeaveRequest(id, approveComment.trim() || undefined)
-      toast('Leave request approved')
-      setApprovingId(null)
-      setApproveComment('')
-      load()
-    } catch (err: any) {
-      toast(errMsg(err, 'Failed to approve request'), 'error')
-    } finally {
-      setRowSubmitting(null)
-    }
+  const openConfirm = (id: number, type: 'approve' | 'reject') => {
+    setConfirmAction({ id, type })
+    setConfirmComment('')
   }
 
-  const handleReject = async (id: number) => {
-    if (!rejectComment.trim()) {
+  const handleConfirmSubmit = async () => {
+    if (!confirmAction) return
+    if (confirmAction.type === 'reject' && !confirmComment.trim()) {
       toast('A comment is required to reject a request', 'error'); return
     }
-    setRowSubmitting(id)
+    setConfirmSubmitting(true)
     try {
-      await rejectLeaveRequest(id, rejectComment.trim())
-      toast('Leave request rejected')
-      setRejectingId(null)
-      setRejectComment('')
+      if (confirmAction.type === 'approve') {
+        await approveLeaveRequest(confirmAction.id, confirmComment.trim() || undefined)
+        toast('Leave request approved')
+      } else {
+        await rejectLeaveRequest(confirmAction.id, confirmComment.trim())
+        toast('Leave request rejected')
+      }
+      setConfirmAction(null)
+      setConfirmComment('')
       load()
     } catch (err: any) {
-      toast(errMsg(err, 'Failed to reject request'), 'error')
+      toast(errMsg(err, `Failed to ${confirmAction.type} request`), 'error')
     } finally {
-      setRowSubmitting(null)
+      setConfirmSubmitting(false)
     }
   }
 
@@ -179,45 +179,48 @@ export default function AdminLeaveQueue() {
     }
   }
 
-  const handleLoadHistory = async () => {
-    const id = parseInt(historyEmployeeId)
-    if (!id || isNaN(id)) {
-      toast('Enter a valid employee ID', 'error'); return
-    }
-    setHistoryLoading(true)
-    setHistoryResults(null)
+  const openWallet = async (employeeId: number, label: string) => {
+    setWalletEmployee({ id: employeeId, label })
+    setWalletLoading(true)
+    setWalletBalances(null)
+    setWalletHistory(null)
     try {
-      const res = await getEmployeeLeaveHistory(id, { page: 1, size: 50 })
-      const items = Array.isArray(res.data) ? res.data : (res.data?.items ?? [])
-      setHistoryResults(items)
+      const [balancesRes, historyRes] = await Promise.all([
+        getEmployeeLeaveBalances(employeeId),
+        getEmployeeLeaveHistory(employeeId, { page: 1, size: 20 }),
+      ])
+      setWalletBalances(balancesRes.data)
+      const items = Array.isArray(historyRes.data) ? historyRes.data : (historyRes.data?.items ?? [])
+      setWalletHistory(items)
     } catch (err: any) {
-      toast(errMsg(err, 'Failed to load employee history'), 'error')
-      setHistoryResults([])
+      toast(errMsg(err, 'Failed to load employee leave wallet'), 'error')
+      setWalletBalances([])
+      setWalletHistory([])
     } finally {
-      setHistoryLoading(false)
+      setWalletLoading(false)
     }
   }
+
+  // Most recent APPROVED request — "last leave taken" means leave actually
+  // used, not just requested; pending/rejected/cancelled don't count.
+  const lastLeaveTaken = walletHistory?.find(r => r.status === 'approved') ?? null
 
   if (loading) return (
     <div className="p-8 max-w-6xl">
       <div className="h-8 w-64 bg-muted rounded animate-pulse mb-1.5" />
       <div className="h-4 w-80 bg-muted rounded animate-pulse mb-6" />
-      <div className="mb-6"><CardGridSkeleton count={2} /></div>
       <Card><TableSkeleton rows={5} cols={7} /></Card>
     </div>
   )
 
   return (
-    <div className="p-8 max-w-6xl">
+    <div className="p-8 max-w-7xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-display font-semibold text-foreground">Leave Approvals</h1>
           <p className="text-sm text-muted-foreground mt-1">Review, approve, or reject pending leave requests</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setHistoryOpen(o => !o)}>
-            <Users size={14} /> Employee History
-          </Button>
           <Button variant="outline" size="sm" onClick={handleExport} loading={exporting}>
             <DownloadIcon size={14} /> Export CSV
           </Button>
@@ -225,241 +228,267 @@ export default function AdminLeaveQueue() {
         </div>
       </div>
 
-      {stats && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="p-5">
-              <p className="text-xs font-medium text-muted-foreground mb-1.5 flex items-center gap-1.5"><BarChart3 size={12} /> Total Requests</p>
-              <p className="text-2xl font-display font-bold text-foreground tabular-nums">{stats.total_requests ?? '—'}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="p-5">
-              <p className="text-xs font-medium text-muted-foreground mb-1.5">Total Days</p>
-              <p className="text-2xl font-display font-bold text-foreground tabular-nums">
-                {stats.total_days !== undefined ? Number(stats.total_days).toFixed(1) : '—'}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* Employee history lookup */}
-      {historyOpen && (
-        <Card className="mb-6 animate-in fade-in slide-in-from-top-1 duration-200">
-          <CardHeader className="pb-3"><CardTitle>Employee Leave History</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex gap-2 items-end">
-              <div className="flex-1 max-w-xs space-y-1.5">
-                <Label>Employee ID</Label>
-                <input
-                  type="number"
-                  value={historyEmployeeId}
-                  onChange={e => setHistoryEmployeeId(e.target.value)}
-                  placeholder="e.g. 4"
-                  className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
-                />
+      <div className="flex gap-6 items-start">
+        {/* Main column */}
+        <div className="flex-1 min-w-0">
+          {/* Filters */}
+          <Card className="mb-4">
+            <CardContent className="p-4 flex flex-wrap gap-3 items-end">
+              <div className="space-y-1.5 w-48">
+                <Label className="text-xs">Leave Type</Label>
+                <Select value={filterLeaveTypeId} onValueChange={setFilterLeaveTypeId}>
+                  <SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All types</SelectItem>
+                    {leaveTypes.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.display_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
-              <Button size="sm" onClick={handleLoadHistory} loading={historyLoading}>
-                <Search size={14} /> Look Up
-              </Button>
-            </div>
-            {historyResults && (
-              historyResults.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No leave requests found for this employee.</p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">From</Label>
+                <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
+                  className="h-9 px-3 rounded-md border border-input bg-background text-sm" />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">To</Label>
+                <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
+                  className="h-9 px-3 rounded-md border border-input bg-background text-sm" />
+              </div>
+              <Button size="sm" variant="outline" onClick={load}>Apply Filters</Button>
+              {(filterLeaveTypeId || filterDateFrom || filterDateTo) && (
+                <Button size="sm" variant="ghost" onClick={() => { setFilterLeaveTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); load() }}>
+                  Clear
+                </Button>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Bulk approve bar */}
+          {selected.size > 0 && (
+            <Card className="mb-4 border-nebula-200 animate-in fade-in duration-150">
+              <CardContent className="p-4 flex items-center gap-3">
+                <span className="text-sm font-medium text-foreground">{selected.size} selected</span>
+                <input
+                  value={bulkComment}
+                  onChange={e => setBulkComment(e.target.value)}
+                  placeholder="Optional comment for all…"
+                  className="flex-1 h-9 px-3 rounded-md border border-input bg-background text-sm"
+                />
+                <Button size="sm" onClick={handleBulkApprove} loading={bulkSubmitting}>
+                  <Check size={14} /> Approve Selected
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Pending queue */}
+          <Card>
+            <CardHeader className="pb-3"><CardTitle>Pending Requests</CardTitle></CardHeader>
+            <CardContent className="p-0">
+              {requests.length === 0 ? (
+                <EmptyState icon={ClipboardList} title="No pending requests" description="You're all caught up." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b bg-muted/40">
-                        <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Dates</th>
-                        <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Type</th>
-                        <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Days</th>
-                        <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Status</th>
+                        <th className="px-4 py-3 w-10">
+                          <input type="checkbox" checked={selected.size === requests.length && requests.length > 0}
+                            onChange={toggleSelectAll} className="rounded border-input" />
+                        </th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Employee</th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Dates</th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Type</th>
+                        <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Days</th>
+                        <th className="px-4 py-3 w-10" />
+                        <th className="px-4 py-3 w-10" />
+                        <th className="px-4 py-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {historyResults.map((r: any) => {
+                      {requests.map((r: any) => {
                         const type = leaveTypes.find(t => t.id === r.leave_type_id)
+                        const employeeLabel = r.employee?.username || `Employee #${r.employee_id}`
                         return (
-                          <tr key={r.id} className="border-b last:border-0">
-                            <td className="px-4 py-2.5 text-muted-foreground whitespace-nowrap">
+                          <tr key={r.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors align-top">
+                            <td className="px-4 py-3.5">
+                              <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)}
+                                className="rounded border-input" />
+                            </td>
+                            <td className="px-4 py-3.5 font-medium text-foreground whitespace-nowrap">{employeeLabel}</td>
+                            <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
                               {formatDate(r.start_date)}{r.end_date !== r.start_date && ` – ${formatDate(r.end_date)}`}
                             </td>
-                            <td className="px-4 py-2.5 text-foreground">{type?.display_name || `#${r.leave_type_id}`}</td>
-                            <td className="px-4 py-2.5 tabular-nums">{Number(r.working_days_count).toFixed(2)}</td>
-                            <td className="px-4 py-2.5"><Badge variant={STATUS_VARIANT[r.status]} dot>{r.status}</Badge></td>
+                            <td className="px-4 py-3.5 text-foreground whitespace-nowrap">{type?.display_name || `#${r.leave_type_id}`}</td>
+                            <td className="px-4 py-3.5 tabular-nums">{Number(r.working_days_count).toFixed(2)}</td>
+                            <td className="px-4 py-3.5">
+                              {r.attachment_path && (
+                                <button onClick={() => handleDownloadAttachment(r.id, r.attachment_path.split('/').pop())}
+                                  className="text-muted-foreground hover:text-nebula-600 transition-colors" title="Download attachment">
+                                  <Paperclip size={14} />
+                                </button>
+                              )}
+                            </td>
+                            <td className="px-4 py-3.5">
+                              {/* Eye icon → per-employee leave wallet popup (PM req #3), replaces the old
+                                  generic "type an ID" lookup and the long inline reason text. */}
+                              <button onClick={() => openWallet(r.employee_id, employeeLabel)}
+                                className="text-muted-foreground hover:text-nebula-600 transition-colors" title="View leave wallet & reason">
+                                <Eye size={14} />
+                              </button>
+                            </td>
+                            <td className="px-4 py-3.5 text-right whitespace-nowrap">
+                              <div className="flex items-center justify-end gap-1.5">
+                                <Button size="sm" variant="outline" onClick={() => openConfirm(r.id, 'approve')}>
+                                  <Check size={13} /> Approve
+                                </Button>
+                                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive"
+                                  onClick={() => openConfirm(r.id, 'reject')}>
+                                  <X size={13} /> Reject
+                                </Button>
+                              </div>
+                            </td>
                           </tr>
                         )
                       })}
                     </tbody>
                   </table>
                 </div>
-              )
-            )}
-          </CardContent>
-        </Card>
-      )}
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
-      {/* Filters */}
-      <Card className="mb-4">
-        <CardContent className="p-4 flex flex-wrap gap-3 items-end">
-          <div className="space-y-1.5 w-48">
-            <Label className="text-xs">Leave Type</Label>
-            <Select value={filterLeaveTypeId} onValueChange={setFilterLeaveTypeId}>
-              <SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">All types</SelectItem>
-                {leaveTypes.map(t => <SelectItem key={t.id} value={String(t.id)}>{t.display_name}</SelectItem>)}
-              </SelectContent>
-            </Select>
+        {/* Sidebar: compact leave calendar, always visible (PM req #3) */}
+        <div className="w-72 shrink-0 hidden lg:block sticky top-4">
+          <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+            <CalendarClock size={12} /> Leave Calendar
+          </p>
+          <LeaveCalendarWidget compact />
+        </div>
+      </div>
+
+      {/* Confirmation dialog — real modal (PM req #3), replaces the old inline expand-row */}
+      <Dialog open={!!confirmAction} onOpenChange={(open: boolean) => { if (!open) setConfirmAction(null) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction?.type === 'approve' ? 'Approve this leave request?' : 'Reject this leave request?'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              {confirmAction?.type === 'approve'
+                ? 'This will mark the request as Approved and notify the employee. This action cannot be undone from here.'
+                : 'This will mark the request as Rejected and notify the employee. A reason is required.'}
+            </p>
+            <div className="space-y-1.5">
+              <Label>{confirmAction?.type === 'reject' ? 'Reason (required)' : 'Comment (optional)'}</Label>
+              <input
+                value={confirmComment}
+                onChange={e => setConfirmComment(e.target.value)}
+                placeholder={confirmAction?.type === 'reject' ? 'Why is this being rejected…' : 'Optional comment…'}
+                className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm"
+              />
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">From</Label>
-            <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)}
-              className="h-9 px-3 rounded-md border border-input bg-background text-sm" />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs">To</Label>
-            <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
-              className="h-9 px-3 rounded-md border border-input bg-background text-sm" />
-          </div>
-          <Button size="sm" variant="outline" onClick={load}>Apply Filters</Button>
-          {(filterLeaveTypeId || filterDateFrom || filterDateTo) && (
-            <Button size="sm" variant="ghost" onClick={() => { setFilterLeaveTypeId(''); setFilterDateFrom(''); setFilterDateTo(''); load() }}>
-              Clear
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setConfirmAction(null)}>Cancel</Button>
+            <Button
+              size="sm"
+              variant={confirmAction?.type === 'reject' ? 'destructive' : 'default'}
+              onClick={handleConfirmSubmit}
+              loading={confirmSubmitting}
+            >
+              {confirmAction?.type === 'approve' ? 'Confirm Approve' : 'Confirm Reject'}
             </Button>
-          )}
-        </CardContent>
-      </Card>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-      {/* Bulk approve bar */}
-      {selected.size > 0 && (
-        <Card className="mb-4 border-nebula-200 animate-in fade-in duration-150">
-          <CardContent className="p-4 flex items-center gap-3">
-            <span className="text-sm font-medium text-foreground">{selected.size} selected</span>
-            <input
-              value={bulkComment}
-              onChange={e => setBulkComment(e.target.value)}
-              placeholder="Optional comment for all…"
-              className="flex-1 h-9 px-3 rounded-md border border-input bg-background text-sm"
-            />
-            <Button size="sm" onClick={handleBulkApprove} loading={bulkSubmitting}>
-              <Check size={14} /> Approve Selected
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Pending queue */}
-      <Card>
-        <CardHeader className="pb-3"><CardTitle>Pending Requests</CardTitle></CardHeader>
-        <CardContent className="p-0">
-          {requests.length === 0 ? (
-            <EmptyState icon={ClipboardList} title="No pending requests" description="You're all caught up." />
+      {/* Employee Leave Wallet popup (PM req #3) */}
+      <Dialog open={!!walletEmployee} onOpenChange={(open: boolean) => { if (!open) setWalletEmployee(null) }}>
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet size={16} className="text-nebula-600" /> {walletEmployee?.label}'s Leave Wallet
+            </DialogTitle>
+          </DialogHeader>
+          {walletLoading ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/40">
-                    <th className="px-4 py-3 w-10">
-                      <input type="checkbox" checked={selected.size === requests.length && requests.length > 0}
-                        onChange={toggleSelectAll} className="rounded border-input" />
-                    </th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Employee</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Dates</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Type</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Days</th>
-                    <th className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">Reason</th>
-                    <th className="px-4 py-3 w-10" />
-                    <th className="px-4 py-3 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {requests.map((r: any) => {
-                    const type = leaveTypes.find(t => t.id === r.leave_type_id)
-                    // Backend now eager-loads and serializes r.employee (see
-                    // EmployeeBrief in leave_request.py schema) — falls back
-                    // to a bare ID only if that's ever missing.
-                    const employeeLabel = r.employee?.username || `Employee #${r.employee_id}`
-                    return (
-                      <>
-                        <tr key={r.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors align-top">
-                          <td className="px-4 py-3.5">
-                            <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)}
-                              className="rounded border-input" />
-                          </td>
-                          <td className="px-4 py-3.5 font-medium text-foreground whitespace-nowrap">{employeeLabel}</td>
-                          <td className="px-4 py-3.5 text-muted-foreground whitespace-nowrap">
+            <div className="space-y-5">
+              {/* Remaining balance + leave type summary — same underlying
+                  data (per-type credited/debited/remaining) serves both. */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <PieChart size={12} /> Remaining Leave Balance
+                </p>
+                {!walletBalances || walletBalances.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No leave balances found.</p>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {walletBalances.map((b: any) => (
+                      <div key={b.leave_type_id} className="rounded-lg border p-2.5">
+                        <p className="text-xs text-muted-foreground">{b.leave_type_display_name}</p>
+                        <p className="text-lg font-display font-semibold text-foreground tabular-nums">
+                          {Number(b.remaining_days).toFixed(1)}
+                          <span className="text-xs text-muted-foreground font-normal"> / {Number(b.total_credited_days).toFixed(1)}</span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <CalendarClock size={12} /> Last Leave Taken
+                </p>
+                {lastLeaveTaken ? (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Badge variant="success" dot>Approved</Badge>
+                    <span className="text-foreground">
+                      {formatDate(lastLeaveTaken.start_date)}
+                      {lastLeaveTaken.end_date !== lastLeaveTaken.start_date && ` – ${formatDate(lastLeaveTaken.end_date)}`}
+                    </span>
+                    <span className="text-muted-foreground">
+                      ({leaveTypes.find(t => t.id === lastLeaveTaken.leave_type_id)?.display_name || `Type #${lastLeaveTaken.leave_type_id}`})
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">No approved leave on record.</p>
+                )}
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <History size={12} /> Previous Leave History
+                </p>
+                {!walletHistory || walletHistory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No leave requests found for this employee.</p>
+                ) : (
+                  <div className="space-y-1.5 max-h-52 overflow-y-auto">
+                    {walletHistory.map((r: any) => {
+                      const type = leaveTypes.find(t => t.id === r.leave_type_id)
+                      return (
+                        <div key={r.id} className="flex items-center justify-between text-xs py-1.5 border-b last:border-0">
+                          <span className="text-foreground">
                             {formatDate(r.start_date)}{r.end_date !== r.start_date && ` – ${formatDate(r.end_date)}`}
-                          </td>
-                          <td className="px-4 py-3.5 text-foreground whitespace-nowrap">{type?.display_name || `#${r.leave_type_id}`}</td>
-                          <td className="px-4 py-3.5 tabular-nums">{Number(r.working_days_count).toFixed(2)}</td>
-                          <td className="px-4 py-3.5 text-muted-foreground max-w-[240px]">
-                            <span className="line-clamp-2">{r.reason}</span>
-                          </td>
-                          <td className="px-4 py-3.5">
-                            {r.attachment_path && (
-                              <button onClick={() => handleDownloadAttachment(r.id, r.attachment_path.split('/').pop())}
-                                className="text-muted-foreground hover:text-nebula-600 transition-colors" title="Download attachment">
-                                <Paperclip size={14} />
-                              </button>
-                            )}
-                          </td>
-                          <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                            <div className="flex items-center justify-end gap-1.5">
-                              <Button size="sm" variant="outline" onClick={() => { setApprovingId(approvingId === r.id ? null : r.id); setRejectingId(null) }}>
-                                <Check size={13} /> Approve
-                              </Button>
-                              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive"
-                                onClick={() => { setRejectingId(rejectingId === r.id ? null : r.id); setApprovingId(null) }}>
-                                <X size={13} /> Reject
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                        {approvingId === r.id && (
-                          <tr className="border-b bg-muted/20">
-                            <td colSpan={8} className="px-4 py-3">
-                              <div className="flex items-center gap-2 max-w-lg">
-                                <input
-                                  value={approveComment}
-                                  onChange={e => setApproveComment(e.target.value)}
-                                  placeholder="Optional comment…"
-                                  className="flex-1 h-8 px-3 rounded-md border border-input bg-background text-sm"
-                                />
-                                <Button size="sm" onClick={() => handleApprove(r.id)} loading={rowSubmitting === r.id}>Confirm Approve</Button>
-                                <Button size="sm" variant="ghost" onClick={() => { setApprovingId(null); setApproveComment('') }}>Cancel</Button>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                        {rejectingId === r.id && (
-                          <tr className="border-b bg-destructive/5">
-                            <td colSpan={8} className="px-4 py-3">
-                              <div className="flex items-center gap-2 max-w-lg">
-                                <input
-                                  value={rejectComment}
-                                  onChange={e => setRejectComment(e.target.value)}
-                                  placeholder="Reason for rejection (required)…"
-                                  className="flex-1 h-8 px-3 rounded-md border border-input bg-background text-sm"
-                                />
-                                <Button size="sm" variant="destructive" onClick={() => handleReject(r.id)} loading={rowSubmitting === r.id}>Confirm Reject</Button>
-                                <Button size="sm" variant="ghost" onClick={() => { setRejectingId(null); setRejectComment('') }}>Cancel</Button>
-                              </div>
-                            </td>
-                          </tr>
-                        )}
-                      </>
-                    )
-                  })}
-                </tbody>
-              </table>
+                          </span>
+                          <span className="text-muted-foreground">{type?.display_name || `#${r.leave_type_id}`}</span>
+                          <Badge variant={STATUS_VARIANT[r.status]} dot>{titleCase(r.status)}</Badge>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
