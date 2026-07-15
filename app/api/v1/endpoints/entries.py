@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_client_ip, get_current_user, require_admin
+from app.core.deps import get_client_ip, get_current_user, require_permission
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -75,36 +75,45 @@ def update_entry(
     )
 
 
-@router.delete("/{entry_id}", response_model=MessageResponse, dependencies=[Depends(require_admin)])
+@router.delete(
+    "/{entry_id}", response_model=MessageResponse,
+    dependencies=[Depends(require_permission("work_entries:manage"))],
+)
 def delete_entry(
     entry_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("work_entries:manage")),
 ) -> MessageResponse:
     EntryService(db).delete_entry(entry_id, current_user=current_user, ip_address=get_client_ip(request))
     return MessageResponse(message="Entry deleted")
 
 
-@router.post("/{entry_id}/approve", response_model=WorkEntryResponse, dependencies=[Depends(require_admin)])
+@router.post(
+    "/{entry_id}/approve", response_model=WorkEntryResponse,
+    dependencies=[Depends(require_permission("work_entries:approve"))],
+)
 def approve_entry(
     entry_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("work_entries:approve")),
 ) -> WorkEntryResponse:
     return EntryService(db).approve_entry(
         entry_id, current_user=current_user, ip_address=get_client_ip(request)
     )
 
 
-@router.post("/{entry_id}/reject", response_model=WorkEntryResponse, dependencies=[Depends(require_admin)])
+@router.post(
+    "/{entry_id}/reject", response_model=WorkEntryResponse,
+    dependencies=[Depends(require_permission("work_entries:approve"))],
+)
 def reject_entry(
     entry_id: int,
     payload: RejectRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("work_entries:approve")),
 ) -> WorkEntryResponse:
     return EntryService(db).reject_entry(
         entry_id, payload.reason, current_user=current_user, ip_address=get_client_ip(request)
@@ -134,7 +143,7 @@ def summary(
     )
 
 
-@router.get("/export", dependencies=[Depends(require_admin)])
+@router.get("/export", dependencies=[Depends(require_permission("work_entries:view_all"))])
 def export_csv(
     employee_id: int | None = None,
     project_id: int | None = None,

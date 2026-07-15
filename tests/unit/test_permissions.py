@@ -51,6 +51,36 @@ def test_legacy_employee_does_not_get_admin_only_codes():
     assert "leave_requests:approve" not in codes
 
 
+# ---- migration 0023: newly added codes for previously require_admin-only routers ----
+
+NEW_CODES_FROM_MIGRATION_0023 = {
+    "work_entries:approve",
+    "work_entries:manage",
+    "users:manage",
+    "projects:manage",
+    "holidays:manage",
+    "leave_types:manage",
+    "leave_ledger:manage",
+    "leave_balances:view_all",
+    "reports:view",
+}
+
+
+def test_legacy_admin_gets_the_newly_added_permission_codes():
+    """Guards against ALL_PERMISSION_CODES drifting out of sync with migration
+    0023's seed data (see that migration's docstring) — a legacy (role_id=NULL)
+    admin must get exactly the same access a freshly-backfilled admin would."""
+    user = _StubUser(role="admin", role_id=None, role_ref=None)
+    codes = user_permission_codes(user)
+    assert NEW_CODES_FROM_MIGRATION_0023.issubset(codes)
+
+
+def test_legacy_employee_does_not_get_the_newly_added_permission_codes():
+    user = _StubUser(role="employee", role_id=None, role_ref=None)
+    codes = user_permission_codes(user)
+    assert NEW_CODES_FROM_MIGRATION_0023.isdisjoint(codes)
+
+
 # ---- user_permission_codes: role_id backfilled, sourced from Role.permissions ----
 
 

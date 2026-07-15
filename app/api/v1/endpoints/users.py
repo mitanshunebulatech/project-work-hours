@@ -5,7 +5,7 @@ app/api/v1/endpoints/users.py
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_client_ip, require_admin
+from app.core.deps import get_client_ip, require_permission
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -13,7 +13,7 @@ from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services.user_service import UserService
 from app.utils.pagination import PageParams
 
-router = APIRouter(prefix="/users", tags=["Users"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/users", tags=["Users"], dependencies=[Depends(require_permission("users:manage"))])
 
 
 @router.get("", response_model=PaginatedResponse[UserResponse])
@@ -35,7 +35,7 @@ def create_user(
     payload: UserCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("users:manage")),
 ) -> UserResponse:
     return UserService(db).create_user(payload, actor_id=current_user.id, ip_address=get_client_ip(request))
 
@@ -46,7 +46,7 @@ def update_user(
     payload: UserUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("users:manage")),
 ) -> UserResponse:
     return UserService(db).update_user(
         user_id, payload, actor_id=current_user.id, ip_address=get_client_ip(request)
@@ -58,7 +58,7 @@ def delete_user(
     user_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("users:manage")),
 ) -> MessageResponse:
     UserService(db).soft_delete_user(user_id, actor_id=current_user.id, ip_address=get_client_ip(request))
     return MessageResponse(message="User deactivated")

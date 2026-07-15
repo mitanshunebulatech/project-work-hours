@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, File, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_client_ip, get_current_user, require_any_role, require_permission
+from app.core.deps import get_client_ip, get_current_user, require_any_role, require_permission, user_permission_codes
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -76,11 +76,11 @@ def download_attachment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> FileResponse:
-    """Only the request's own employee or an admin may fetch the file — never a public URL."""
+    """Only the request's own employee or someone with leave_requests:view_all may fetch the file — never a public URL."""
     file_path = LeaveService(db).get_attachment_path(
         request_id=request_id,
         requesting_user_id=current_user.id,
-        is_admin=current_user.role == "admin",
+        is_admin="leave_requests:view_all" in user_permission_codes(current_user),
     )
     return FileResponse(file_path)
 
@@ -103,14 +103,15 @@ def list_requests(
     employee_id to filter, or omit it to see everyone's.
     """
     service = LeaveService(db)
-    effective_employee_id = employee_id if current_user.role == "admin" else current_user.id
+    can_view_all = "leave_requests:view_all" in user_permission_codes(current_user)
+    effective_employee_id = employee_id if can_view_all else current_user.id
     items, total = service.leave_request_repo.search(
         employee_id=effective_employee_id,
         status=status,
         leave_type_id=leave_type_id,
         date_from=date_from,
         date_to=date_to,
-        search=search if current_user.role == "admin" else None,
+        search=search if can_view_all else None,
         limit=pagination.size,
         offset=(pagination.page - 1) * pagination.size,
     )
@@ -191,7 +192,7 @@ def cancel_request(
     cancelled = LeaveService(db).cancel_request(
         request_id=request_id,
         requesting_user_id=current_user.id,
-        is_admin=current_user.role == "admin",
+        is_admin="leave_requests:approve" in user_permission_codes(current_user),
         ip_address=get_client_ip(request),
     )
     return LeaveRequestResponse.model_validate(cancelled)

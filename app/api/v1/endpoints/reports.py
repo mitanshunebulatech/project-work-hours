@@ -8,12 +8,12 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.core.deps import require_admin
+from app.core.deps import require_permission
 from app.db.session import get_db
 from app.schemas.report import ReportSummaryResponse
 from app.services.report_service import ReportService
 
-router = APIRouter(prefix="/reports", tags=["Reports"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/reports", tags=["Reports"], dependencies=[Depends(require_permission("reports:view"))])
 
 
 @router.get("/summary", response_model=ReportSummaryResponse)

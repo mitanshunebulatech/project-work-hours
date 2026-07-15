@@ -7,7 +7,7 @@ from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user, require_permission
 from app.db.repositories.leave_balance_repo import LeaveBalanceRepository
 from app.db.repositories.leave_policy_repo import LeavePolicyRepository
 from app.db.repositories.leave_type_repo import LeaveTypeRepository
@@ -71,7 +71,7 @@ def my_balances(
 @router.get(
     "/employee/{employee_id}",
     response_model=list[LeaveBalanceResponse],
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(require_permission("leave_balances:view_all"))],
 )
 def employee_balances(
     employee_id: int,

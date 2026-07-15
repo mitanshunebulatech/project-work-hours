@@ -33,6 +33,16 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         "departments:manage",
         "roles:manage",
         "audit_logs:view",
+        # Added by migration 0023 — see that migration's docstring for why.
+        "work_entries:approve",
+        "work_entries:manage",
+        "users:manage",
+        "projects:manage",
+        "holidays:manage",
+        "leave_types:manage",
+        "leave_ledger:manage",
+        "leave_balances:view_all",
+        "reports:view",
     }
 )
 
