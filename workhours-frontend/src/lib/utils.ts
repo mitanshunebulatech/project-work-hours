@@ -11,6 +11,19 @@ export function formatDate(dateStr: string) {
   })
 }
 
+/**
+ * Formats a Date as 'yyyy-MM-dd' using LOCAL time components (not
+ * toISOString(), which converts to UTC first and can shift the date near
+ * midnight IST — e.g. 00:30 IST on the 10th becomes '...T19:00Z' the 9th).
+ * Used for the Timesheet date picker and any other admin date-filter param.
+ */
+export function toApiDateString(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export function formatHours(h: number | string) {
   return `${Number(h).toFixed(1)}h`
 }
