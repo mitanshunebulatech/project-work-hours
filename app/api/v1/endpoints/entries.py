@@ -4,7 +4,7 @@ app/api/v1/endpoints/entries.py
 
 from datetime import date
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -29,7 +29,9 @@ router = APIRouter(prefix="/entries", tags=["Work Entries"])
 def list_entries(
     pagination: PageParams = Depends(),
     employee_id: int | None = None,
+    employee_ids: list[int] | None = Query(None),
     project_id: int | None = None,
+    project_ids: list[int] | None = Query(None),
     status: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -37,12 +39,20 @@ def list_entries(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> PaginatedResponse[WorkEntryResponse]:
+    """
+    employee_ids / project_ids are repeated query params for the admin
+    multi-select checkbox filters (PM req #2), e.g.
+    ?employee_ids=1&employee_ids=2&project_ids=5 — additive alongside the
+    existing singular employee_id/project_id, not a replacement.
+    """
     return EntryService(db).list_entries(
         current_user=current_user,
         page=pagination.page,
         size=pagination.size,
         employee_id=employee_id,
+        employee_ids=employee_ids,
         project_id=project_id,
+        project_ids=project_ids,
         status=status,
         date_from=date_from,
         date_to=date_to,
@@ -146,7 +156,9 @@ def summary(
 @router.get("/export", dependencies=[Depends(require_permission("work_entries:view_all"))])
 def export_csv(
     employee_id: int | None = None,
+    employee_ids: list[int] | None = Query(None),
     project_id: int | None = None,
+    project_ids: list[int] | None = Query(None),
     status: str | None = None,
     date_from: date | None = None,
     date_to: date | None = None,
@@ -154,7 +166,9 @@ def export_csv(
 ) -> StreamingResponse:
     csv_content = EntryService(db).export_entries_csv(
         employee_id=employee_id,
+        employee_ids=employee_ids,
         project_id=project_id,
+        project_ids=project_ids,
         status=status,
         date_from=date_from,
         date_to=date_to,

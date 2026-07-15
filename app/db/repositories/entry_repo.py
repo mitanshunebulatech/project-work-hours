@@ -49,7 +49,9 @@ class WorkEntryRepository(BaseRepository[WorkEntry]):
         self,
         *,
         employee_id: int | None = None,
+        employee_ids: list[int] | None = None,
         project_id: int | None = None,
+        project_ids: list[int] | None = None,
         status: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
@@ -61,14 +63,26 @@ class WorkEntryRepository(BaseRepository[WorkEntry]):
         employee_id=None means 'no restriction' (admin viewing all).
         The service layer is responsible for passing the current employee's id
         when the caller is an employee — this repository has no concept of roles.
+
+        employee_ids/project_ids (plural) are the multi-select checkbox filters
+        (PM req #2) — additive alongside the existing singular params rather
+        than replacing them, so any other caller still passing a single
+        employee_id/project_id keeps working unchanged. If both a singular and
+        plural filter are given for the same field, the plural one wins (it's
+        the more specific ask); passing both isn't expected in practice, but
+        this makes call order irrelevant either way.
         """
         stmt = select(WorkEntry).options(joinedload(WorkEntry.employee), joinedload(WorkEntry.project))
         count_stmt = select(func.count()).select_from(WorkEntry)
 
         conditions = []
-        if employee_id is not None:
+        if employee_ids:
+            conditions.append(WorkEntry.employee_id.in_(employee_ids))
+        elif employee_id is not None:
             conditions.append(WorkEntry.employee_id == employee_id)
-        if project_id is not None:
+        if project_ids:
+            conditions.append(WorkEntry.project_id.in_(project_ids))
+        elif project_id is not None:
             conditions.append(WorkEntry.project_id == project_id)
         if status is not None:
             conditions.append(WorkEntry.status == status)
@@ -103,17 +117,23 @@ class WorkEntryRepository(BaseRepository[WorkEntry]):
         self,
         *,
         employee_id: int | None = None,
+        employee_ids: list[int] | None = None,
         project_id: int | None = None,
+        project_ids: list[int] | None = None,
         status: str | None = None,
         date_from: date | None = None,
         date_to: date | None = None,
     ) -> list[WorkEntry]:
-        """Unpaginated variant of search(), for CSV export."""
+        """Unpaginated variant of search(), for CSV export. Same plural-wins-over-singular rule."""
         stmt = select(WorkEntry).options(joinedload(WorkEntry.employee), joinedload(WorkEntry.project))
         conditions = []
-        if employee_id is not None:
+        if employee_ids:
+            conditions.append(WorkEntry.employee_id.in_(employee_ids))
+        elif employee_id is not None:
             conditions.append(WorkEntry.employee_id == employee_id)
-        if project_id is not None:
+        if project_ids:
+            conditions.append(WorkEntry.project_id.in_(project_ids))
+        elif project_id is not None:
             conditions.append(WorkEntry.project_id == project_id)
         if status is not None:
             conditions.append(WorkEntry.status == status)

@@ -53,18 +53,26 @@ class EntryService:
         page: int,
         size: int,
         employee_id: int | None,
+        employee_ids: list[int] | None = None,
         project_id: int | None,
+        project_ids: list[int] | None = None,
         status: str | None,
         date_from: date | None,
         date_to: date | None,
         search: str | None,
     ) -> PaginatedResponse[WorkEntryResponse]:
         # Role scoping happens here, not in the repository — repositories are role-agnostic.
+        # A non-admin's employee_ids selection is ignored entirely (not narrowed to their
+        # own id inside the list) — an employee has no "other employees" to multi-select
+        # in the first place, so silently dropping the filter is correct, not a downgrade.
         scoped_employee_id = employee_id if current_user.is_admin else current_user.id
+        scoped_employee_ids = employee_ids if current_user.is_admin else None
 
         items, total = self.entry_repo.search(
             employee_id=scoped_employee_id,
+            employee_ids=scoped_employee_ids,
             project_id=project_id,
+            project_ids=project_ids,
             status=status,
             date_from=date_from,
             date_to=date_to,
@@ -237,14 +245,18 @@ class EntryService:
         self,
         *,
         employee_id: int | None,
+        employee_ids: list[int] | None = None,
         project_id: int | None,
+        project_ids: list[int] | None = None,
         status: str | None,
         date_from: date | None,
         date_to: date | None,
     ) -> str:
         entries = self.entry_repo.search_all_for_export(
             employee_id=employee_id,
+            employee_ids=employee_ids,
             project_id=project_id,
+            project_ids=project_ids,
             status=status,
             date_from=date_from,
             date_to=date_to,
