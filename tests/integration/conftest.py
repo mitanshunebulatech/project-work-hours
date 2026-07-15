@@ -69,6 +69,13 @@ def _build_test_metadata() -> MetaData:
     Base.metadata.tables["departments"].to_metadata(test_metadata)
     Base.metadata.tables["employee_profiles"].to_metadata(test_metadata)
 
+    # Chunk 2: leave_types and leave_requests, needed for DashboardService
+    # integration tests (on-leave-today, recent-activities, calendar
+    # widget). Both use only portable column types, same reasoning as the
+    # departments/employee_profiles addition above — no stand-in required.
+    Base.metadata.tables["leave_types"].to_metadata(test_metadata)
+    Base.metadata.tables["leave_requests"].to_metadata(test_metadata)
+
     # Stand-in audit_logs: same shape as app/models/audit_log.py, with
     # SQLite-compatible types swapped in for JSONB/INET only.
     Table(
@@ -124,3 +131,13 @@ def seeded_project(db_session: Session) -> Project:
     db_session.add(project)
     db_session.commit()
     return project
+
+
+@pytest.fixture
+def seeded_leave_type(db_session: Session):
+    from app.models.leave_type import LeaveType
+
+    leave_type = LeaveType(code="AL", display_name="Annual Leave", is_paid=True, allows_half_day=True)
+    db_session.add(leave_type)
+    db_session.commit()
+    return leave_type

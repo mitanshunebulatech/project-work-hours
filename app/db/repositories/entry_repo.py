@@ -126,6 +126,47 @@ class WorkEntryRepository(BaseRepository[WorkEntry]):
         stmt = stmt.order_by(WorkEntry.entry_date.desc(), WorkEntry.id.desc())
         return list(self.db.execute(stmt).unique().scalars().all())
 
+    def get_status_count_for_date(self, entry_date: date, status: str) -> int:
+        """Used by the dashboard's 'Pending Timesheet Approvals' widget (today-scoped, per PM decision)."""
+        stmt = (
+            select(func.count())
+            .select_from(WorkEntry)
+            .where(WorkEntry.entry_date == entry_date, WorkEntry.status == status)
+        )
+        return self.db.execute(stmt).scalar_one()
+
+    def get_missing_timesheet_employees(
+        self, entry_date: date, exclude_employee_ids: set[int] | None = None
+    ) -> list[User]:
+        """
+        Active employees with no work entry on the given date. Best-practice
+        definition used in the absence of any 'expected hours' baseline
+        (there is none in this schema — confirmed with PM) — an employee who
+        logged nothing at all for the date is "missing", not partial-hours
+        thresholds.
+
+        exclude_employee_ids is meant for employees on approved leave that
+        date — they aren't expected to log hours, so they shouldn't show up
+        as "missing". The caller (DashboardService) is responsible for
+        supplying that set from LeaveRequestRepository.get_on_leave_for_date().
+        """
+        entered_subquery = select(WorkEntry.employee_id).where(WorkEntry.entry_date == entry_date).distinct()
+        conditions = [User.is_active.is_(True), User.deleted_at.is_(None), User.id.not_in(entered_subquery)]
+        if exclude_employee_ids:
+            conditions.append(User.id.not_in(exclude_employee_ids))
+        stmt = select(User).where(*conditions).order_by(User.username)
+        return list(self.db.execute(stmt).scalars().all())
+
+    def get_recent(self, limit: int = 10) -> list[WorkEntry]:
+        """Most recently created entries, for the dashboard's Recent Activities feed."""
+        stmt = (
+            select(WorkEntry)
+            .options(joinedload(WorkEntry.employee), joinedload(WorkEntry.project))
+            .order_by(WorkEntry.created_at.desc(), WorkEntry.id.desc())
+            .limit(limit)
+        )
+        return list(self.db.execute(stmt).unique().scalars().all())
+
     def aggregate_summary(
         self,
         *,
