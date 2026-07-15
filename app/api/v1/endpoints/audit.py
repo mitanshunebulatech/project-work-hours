@@ -7,14 +7,14 @@ from datetime import date
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.core.deps import require_admin
+from app.core.deps import require_permission
 from app.db.repositories.audit_repo import AuditRepository
 from app.db.session import get_db
 from app.schemas.audit import AuditLogResponse
 from app.schemas.common import PaginatedResponse
 from app.utils.pagination import PageParams
 
-router = APIRouter(prefix="/audit", tags=["Audit"], dependencies=[Depends(require_admin)])
+router = APIRouter(prefix="/audit", tags=["Audit"], dependencies=[Depends(require_permission("audit_logs:view"))])
 
 
 @router.get("", response_model=PaginatedResponse[AuditLogResponse])
