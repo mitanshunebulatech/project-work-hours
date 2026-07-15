@@ -6,7 +6,7 @@ import {
   Clock, LayoutDashboard, Users, FolderOpen,
   BarChart3, Shield, LogOut, ChevronLeft, ChevronRight,
   Search, Moon, Sun, Settings, User as UserIcon, Command, Plane, CalendarCheck, CalendarDays,
-  Building2, Users2
+  Building2, Users2, ShieldCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ReactNode, useState } from 'react'
@@ -27,6 +27,7 @@ const navItems: NavItem[] = [
   { label: 'Leave Approvals', to: '/admin/leave', icon: <CalendarCheck size={18} />, adminOnly: true },
   { label: 'Leave Calendar', to: '/admin/leave-calendar', icon: <CalendarDays size={18} />, adminOnly: true },
   { label: 'Users', to: '/admin/users', icon: <Users size={18} />, adminOnly: true },
+  { label: 'Roles', to: '/admin/roles', icon: <ShieldCheck size={18} />, adminOnly: true },
   { label: 'Departments', to: '/admin/departments', icon: <Building2 size={18} />, adminOnly: true },
   { label: 'Employees', to: '/admin/employees', icon: <Users2 size={18} />, adminOnly: true },
   { label: 'Projects', to: '/admin/projects', icon: <FolderOpen size={18} />, adminOnly: true },
@@ -43,6 +44,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/leave': 'Leave Approvals',
   '/admin/leave-calendar': 'Leave Calendar',
   '/admin/users': 'Users',
+  '/admin/roles': 'Roles',
   '/admin/departments': 'Departments',
   '/admin/employees': 'Employees',
   '/admin/projects': 'Projects',

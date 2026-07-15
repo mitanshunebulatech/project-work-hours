@@ -54,6 +54,12 @@ def _build_test_metadata() -> MetaData:
     Base.metadata.tables["projects"].to_metadata(test_metadata)
     Base.metadata.tables["work_entries"].to_metadata(test_metadata)
 
+    # Sprint 4: permissions + the role_permissions association table, needed
+    # for RoleService integration tests (Role.permissions is a many-to-many
+    # via this table).
+    Base.metadata.tables["permissions"].to_metadata(test_metadata)
+    Base.metadata.tables["role_permissions"].to_metadata(test_metadata)
+
     # Sprint 2: departments and employee_profiles, needed for
     # DepartmentService / EmployeeProfileService integration tests.
     # employee_profiles.pan_number uses EncryptedString (a TypeDecorator over

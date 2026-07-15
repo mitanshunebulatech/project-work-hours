@@ -189,3 +189,15 @@ export const updateEmployeeProfile = (
     pan_number?: string | null
   }
 ) => api.patch(`/employees/${profileId}`, data)
+
+// --- Roles & Permissions ---
+export const getRoles = () => api.get('/roles')
+export const getRole = (roleId: number) => api.get(`/roles/${roleId}`)
+export const getPermissions = () => api.get('/permissions')
+export const createRole = (data: { name: string; description?: string | null; permission_codes?: string[] }) =>
+  api.post('/roles', data)
+export const updateRole = (
+  roleId: number,
+  data: { name?: string; description?: string | null; permission_codes?: string[] }
+) => api.patch(`/roles/${roleId}`, data)
+export const deleteRole = (roleId: number) => api.delete(`/roles/${roleId}`)
