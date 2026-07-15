@@ -135,7 +135,11 @@ def list_pending(
     date_to: date | None = None,
     db: Session = Depends(get_db),
 ) -> PaginatedResponse[LeaveRequestResponse]:
-    """Approval-queue triage — oldest-pending-first (see LeaveRequestRepository.search's oldest_first).
+    """Approval-queue triage — latest-first (PM req #3, Leave Approval Module).
+    Was oldest-first triage-order originally; product direction changed to
+    latest-first so newly-submitted requests surface at the top. The repo's
+    search() already defaults to newest-first when oldest_first is omitted,
+    so this only required dropping the explicit override below.
     Gated on leave_requests:approve (not view_all): this is a to-do list for
     whoever approves leave, not a general reporting view."""
     service = LeaveService(db)
@@ -144,7 +148,6 @@ def list_pending(
         leave_type_id=leave_type_id,
         date_from=date_from,
         date_to=date_to,
-        oldest_first=True,
         limit=pagination.size,
         offset=(pagination.page - 1) * pagination.size,
     )
