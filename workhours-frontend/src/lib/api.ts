@@ -1,6 +1,28 @@
 import axios from 'axios'
 
-const api = axios.create({ baseURL: '/api/v1', timeout: 10000 })
+/**
+ * axios's default array-param serialization uses bracket notation
+ * (employee_ids[]=1&employee_ids[]=2), which FastAPI's
+ * `employee_ids: list[int] = Query(None)` does NOT parse — it expects plain
+ * repeated keys (employee_ids=1&employee_ids=2). Without this, the
+ * Timesheet Module's multi-select employee/project filters would silently
+ * send the array and have the backend receive nothing (verified against a
+ * real axios 1.7.9 build before this was added — see the PR description).
+ */
+function serializeParams(params: Record<string, unknown>): string {
+  const usp = new URLSearchParams()
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null) return
+    if (Array.isArray(value)) {
+      value.forEach(v => { if (v !== undefined && v !== null) usp.append(key, String(v)) })
+    } else {
+      usp.append(key, String(value))
+    }
+  })
+  return usp.toString()
+}
+
+const api = axios.create({ baseURL: '/api/v1', timeout: 10000, paramsSerializer: { serialize: serializeParams } })
 
 api.interceptors.request.use(config => {
   const token = localStorage.getItem('access_token')
@@ -69,6 +91,12 @@ export const deleteEntry = (id: number) => api.delete(`/entries/${id}`)
 export const approveEntry = (id: number) => api.post(`/entries/${id}/approve`)
 export const rejectEntry = (id: number, reason: string) =>
   api.post(`/entries/${id}/reject`, { reason })
+// Points at /entries/export (supports employee_ids/project_ids multi-select),
+// not /reports/export — that's a separate, older export path that only
+// supports singular employee_id/project_id and doesn't know about the
+// Timesheet Module's checkbox filters.
+export const exportEntriesCsv = (params?: object) =>
+  api.get('/entries/export', { params, responseType: 'blob' })
 
 // Users
 export const getUsers = (params?: object) => api.get('/users', { params })

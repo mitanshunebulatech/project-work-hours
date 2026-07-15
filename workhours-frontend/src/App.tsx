@@ -11,7 +11,7 @@ const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Timesheets = lazy(() => import('@/pages/Timesheets'))
 const Leave = lazy(() => import('@/pages/Leave'))
 const Profile = lazy(() => import('@/pages/Profile'))
-const AdminEntries = lazy(() => import('@/pages/AdminEntries'))
+const AdminTimesheets = lazy(() => import('@/pages/AdminTimesheets'))
 const AdminUsers = lazy(() => import('@/pages/AdminUsers'))
 const AdminRoles = lazy(() => import('@/pages/AdminRoles'))
 const AdminDepartments = lazy(() => import('@/pages/AdminDepartments'))
@@ -68,7 +68,7 @@ function AppRoutes() {
                 <Route path="/timesheets" element={<Timesheets />} />
                 <Route path="/leave" element={<Leave />} />
                 <Route path="/profile" element={<Profile />} />
-                <Route path="/admin/entries" element={<ProtectedRoute adminOnly><AdminEntries /></ProtectedRoute>} />
+                <Route path="/admin/timesheets" element={<ProtectedRoute adminOnly><AdminTimesheets /></ProtectedRoute>} />
                 <Route path="/admin/leave" element={<ProtectedRoute adminOnly><AdminLeaveQueue /></ProtectedRoute>} />
                 <Route path="/admin/leave-calendar" element={<ProtectedRoute adminOnly><LeaveCalendar /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>} />
