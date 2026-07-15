@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
 from app.core.security import hash_password
 from app.db.repositories.audit_repo import AuditRepository
+from app.db.repositories.role_repo import RoleRepository
 from app.db.repositories.user_repo import UserRepository
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
@@ -17,6 +18,7 @@ class UserService:
     def __init__(self, db: Session):
         self.db = db
         self.user_repo = UserRepository(db)
+        self.role_repo = RoleRepository(db)
         self.audit_repo = AuditRepository(db)
 
     def list_users(
@@ -67,12 +69,16 @@ class UserService:
         if user is None or user.deleted_at is not None:
             raise NotFoundError("User not found")
 
-        before = {"email": user.email, "role": user.role, "is_active": user.is_active}
+        before = {"email": user.email, "role": user.role, "role_id": user.role_id, "is_active": user.is_active}
 
         if payload.email is not None:
             user.email = payload.email
         if payload.role is not None:
             user.role = payload.role
+        if payload.role_id is not None:
+            if self.role_repo.get(payload.role_id) is None:
+                raise NotFoundError("Role not found")
+            user.role_id = payload.role_id
         if payload.is_active is not None:
             user.is_active = payload.is_active
 
@@ -84,7 +90,12 @@ class UserService:
             operation="UPDATE",
             record_id=updated.id,
             before_data=before,
-            after_data={"email": updated.email, "role": updated.role, "is_active": updated.is_active},
+            after_data={
+                "email": updated.email,
+                "role": updated.role,
+                "role_id": updated.role_id,
+                "is_active": updated.is_active,
+            },
             ip_address=ip_address,
         )
         self.db.commit()

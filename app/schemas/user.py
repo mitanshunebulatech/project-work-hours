@@ -27,6 +27,7 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     email: EmailStr | None = None
     role: Role | None = None
+    role_id: int | None = None
     is_active: bool | None = None
 
 
@@ -37,6 +38,7 @@ class UserResponse(BaseModel):
     username: str
     email: str | None
     role: str
+    role_id: int | None
     is_active: bool
     created_at: datetime
 

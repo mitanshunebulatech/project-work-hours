@@ -51,3 +51,9 @@ class UserRepository(BaseRepository[User]):
         stmt = stmt.order_by(User.created_at.desc()).limit(limit).offset(offset)
         items = list(self.db.execute(stmt).scalars().all())
         return items, total
+
+    def count_by_role_id(self, role_id: int) -> int:
+        """Used by RoleService.delete_role to block deleting a role that's
+        still assigned to users, rather than orphaning User.role_id."""
+        stmt = select(func.count()).select_from(User).where(User.role_id == role_id, User.deleted_at.is_(None))
+        return self.db.execute(stmt).scalar_one()

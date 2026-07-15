@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { getUsers, createUser, updateUser } from '@/lib/api'
+import { getUsers, createUser, updateUser, getRoles } from '@/lib/api'
 import { useToast } from '@/hooks/useToast'
 import { Card, CardContent, CardHeader, CardTitle, Badge, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/misc'
 import { Button } from '@/components/ui/button'
@@ -11,6 +11,7 @@ import { Plus, RefreshCw, ToggleLeft, ToggleRight, Users } from 'lucide-react'
 export default function AdminUsers() {
   const { toast } = useToast()
   const [users, setUsers] = useState<any[]>([])
+  const [roles, setRoles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -20,8 +21,9 @@ export default function AdminUsers() {
   const load = async () => {
     setLoading(true)
     try {
-      const res = await getUsers({ page: 1, size: 100 })
-      setUsers(res.data.items)
+      const [usersRes, rolesRes] = await Promise.all([getUsers({ page: 1, size: 100 }), getRoles()])
+      setUsers(usersRes.data.items)
+      setRoles(rolesRes.data)
     } finally { setLoading(false) }
   }
 
@@ -137,6 +139,7 @@ export default function AdminUsers() {
                     <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">User</th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Email</th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Role</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Custom Role</th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Status</th>
                     <th className="px-6 py-3 text-right text-xs font-medium text-muted-foreground">Actions</th>
                   </tr>
@@ -153,6 +156,28 @@ export default function AdminUsers() {
                       <td className="px-6 py-3.5 text-muted-foreground">{u.email || '—'}</td>
                       <td className="px-6 py-3.5">
                         <Badge variant={u.role === 'admin' ? 'default' : 'secondary'}>{u.role}</Badge>
+                      </td>
+                      <td className="px-6 py-3.5">
+                        <Select
+                          value={u.role_id ? String(u.role_id) : 'none'}
+                          onValueChange={async v => {
+                            try {
+                              await updateUser(u.id, { role_id: v === 'none' ? null : Number(v) })
+                              toast('Role assigned')
+                              load()
+                            } catch (err: any) {
+                              toast(err.response?.data?.detail || 'Failed to assign role', 'error')
+                            }
+                          }}
+                        >
+                          <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Unassigned</SelectItem>
+                            {roles.map(r => (
+                              <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </td>
                       <td className="px-6 py-3.5">
                         <Badge variant={u.is_active ? 'success' : 'outline'} dot>
