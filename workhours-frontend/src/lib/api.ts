@@ -52,6 +52,9 @@ export const updateProfile = (data: {
   pan_number?: string | null
 }) => api.patch('/profile/me', data)
 
+// Dashboard (admin operations view — PM req #1)
+export const getDashboardSummary = () => api.get('/dashboard/summary')
+
 // Projects
 export const getProjects = (params?: object) => api.get('/projects', { params })
 export const createProject = (data: object) => api.post('/projects', data)
