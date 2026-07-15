@@ -5,7 +5,7 @@ app/api/v1/endpoints/holidays.py
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_client_ip, require_admin, require_any_role
+from app.core.deps import get_client_ip, require_any_role, require_permission
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -33,7 +33,7 @@ def create_holiday(
     payload: HolidayCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("holidays:manage")),
 ) -> HolidayResponse:
     return HolidayService(db).create_holiday(
         payload, actor_id=current_user.id, ip_address=get_client_ip(request)
@@ -46,7 +46,7 @@ def update_holiday(
     payload: HolidayUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("holidays:manage")),
 ) -> HolidayResponse:
     return HolidayService(db).update_holiday(
         holiday_id, payload, actor_id=current_user.id, ip_address=get_client_ip(request)
@@ -58,7 +58,7 @@ def deactivate_holiday(
     holiday_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("holidays:manage")),
 ) -> MessageResponse:
     HolidayService(db).deactivate_holiday(
         holiday_id, actor_id=current_user.id, ip_address=get_client_ip(request)

@@ -5,7 +5,7 @@ app/api/v1/endpoints/projects.py
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from app.core.deps import get_client_ip, require_admin, require_any_role
+from app.core.deps import get_client_ip, require_any_role, require_permission
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.common import MessageResponse, PaginatedResponse
@@ -33,7 +33,7 @@ def create_project(
     payload: ProjectCreate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("projects:manage")),
 ) -> ProjectResponse:
     return ProjectService(db).create_project(
         payload, actor_id=current_user.id, ip_address=get_client_ip(request)
@@ -46,7 +46,7 @@ def update_project(
     payload: ProjectUpdate,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("projects:manage")),
 ) -> ProjectResponse:
     return ProjectService(db).update_project(
         project_id, payload, actor_id=current_user.id, ip_address=get_client_ip(request)
@@ -58,7 +58,7 @@ def delete_project(
     project_id: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_admin),
+    current_user: User = Depends(require_permission("projects:manage")),
 ) -> MessageResponse:
     ProjectService(db).soft_delete_project(
         project_id, actor_id=current_user.id, ip_address=get_client_ip(request)
