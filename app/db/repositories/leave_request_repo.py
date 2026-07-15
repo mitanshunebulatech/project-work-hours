@@ -112,6 +112,56 @@ class LeaveRequestRepository(BaseRepository[LeaveRequest]):
             stmt = stmt.where(LeaveRequest.id != exclude_request_id)
         return list(self.db.execute(stmt).scalars().all())
 
+    def get_on_leave_for_date(self, target_date: date) -> list[LeaveRequest]:
+        """
+        Approved leave requests covering the given date. Used by the
+        dashboard's 'Employees on Leave Today' widget, and its returned
+        employee_ids are also used to exclude on-leave employees from the
+        'Missing Timesheets' widget (see WorkEntryRepository.get_missing_timesheet_employees).
+        """
+        stmt = (
+            select(LeaveRequest)
+            .options(joinedload(LeaveRequest.employee), joinedload(LeaveRequest.leave_type))
+            .where(
+                LeaveRequest.status == "approved",
+                LeaveRequest.start_date <= target_date,
+                LeaveRequest.end_date >= target_date,
+            )
+        )
+        return list(self.db.execute(stmt).unique().scalars().all())
+
+    def get_recent(self, limit: int = 10) -> list[LeaveRequest]:
+        """Most recently created requests, for the dashboard's Recent Activities feed."""
+        stmt = (
+            select(LeaveRequest)
+            .options(joinedload(LeaveRequest.employee), joinedload(LeaveRequest.leave_type))
+            .order_by(LeaveRequest.created_at.desc(), LeaveRequest.id.desc())
+            .limit(limit)
+        )
+        return list(self.db.execute(stmt).unique().scalars().all())
+
+    def get_last_taken_for_employee(
+        self, employee_id: int, *, exclude_request_id: int | None = None
+    ) -> LeaveRequest | None:
+        """
+        Most recent approved leave for this employee (by start_date). Feeds
+        the Leave Approval Module's eye-icon 'Leave Wallet' popup ('Last
+        Leave Taken' — PM req #3). exclude_request_id lets the caller pass
+        the request currently under review so 'last taken' doesn't just
+        echo the very request being previewed.
+        """
+        conditions = [LeaveRequest.employee_id == employee_id, LeaveRequest.status == "approved"]
+        if exclude_request_id is not None:
+            conditions.append(LeaveRequest.id != exclude_request_id)
+        stmt = (
+            select(LeaveRequest)
+            .options(joinedload(LeaveRequest.leave_type))
+            .where(*conditions)
+            .order_by(LeaveRequest.start_date.desc())
+            .limit(1)
+        )
+        return self.db.execute(stmt).scalars().first()
+
     def get_calendar_entries(self, *, month: int, year: int) -> list[LeaveRequest]:
         """Approved-only leave overlapping the given month, for the org-wide calendar view."""
         from calendar import monthrange
