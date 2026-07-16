@@ -17,11 +17,16 @@ import {
 } from '@/components/ui/dropdown-menu'
 import NotificationBell from '@/components/NotificationBell'
 
-interface NavItem { label: string; to: string; icon: ReactNode; adminOnly?: boolean }
+interface NavItem { label: string; to: string; icon: ReactNode; adminOnly?: boolean; employeeOnly?: boolean }
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', icon: <LayoutDashboard size={18} /> },
-  { label: 'My Timesheets', to: '/timesheets', icon: <Clock size={18} /> },
+  // employeeOnly, not just "no adminOnly flag": an admin account can still
+  // technically be routed to /timesheets, but EntryService.create_entry now
+  // rejects it server-side (see app/services/entry_service.py) — this nav
+  // filter keeps the UI consistent with that, rather than showing a link
+  // that only leads to a 403.
+  { label: 'My Timesheets', to: '/timesheets', icon: <Clock size={18} />, employeeOnly: true },
   { label: 'Leave', to: '/leave', icon: <Plane size={18} /> },
   { label: 'Timesheets', to: '/admin/timesheets', icon: <Clock size={18} />, adminOnly: true },
   { label: 'Leave Approvals', to: '/admin/leave', icon: <CalendarCheck size={18} />, adminOnly: true },
@@ -67,7 +72,7 @@ export default function Layout({ children }: { children: ReactNode }) {
     navigate('/login')
   }
 
-  const visibleNav = navItems.filter(i => !i.adminOnly || isAdmin)
+  const visibleNav = navItems.filter(i => (!i.adminOnly || isAdmin) && (!i.employeeOnly || !isAdmin))
   const pageTitle = PAGE_TITLES[location.pathname] || 'WorkHours'
 
   return (

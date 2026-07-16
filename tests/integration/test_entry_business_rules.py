@@ -16,7 +16,7 @@ from decimal import Decimal
 import pytest
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError
+from app.core.exceptions import ConflictError, ForbiddenError
 from app.models.project import Project
 from app.models.user import User
 from app.schemas.entry import WorkEntryCreate
@@ -225,6 +225,43 @@ def test_employee_cannot_bypass_scoping_by_passing_another_employee_id(
 
     assert bob_attempting_to_view_alice.total == 0
     assert bob_attempting_to_view_alice.items == []
+
+
+def test_admin_cannot_create_a_personal_work_entry(
+    db_session: Session, seeded_project: Project
+) -> None:
+    """
+    PM item 1/2: admins review timesheets, they don't submit their own. This
+    pins the fix for a real gap found during a repo audit — previously this
+    was only enforced by hiding the nav link (Layout.tsx) and not gating the
+    /timesheets route, which meant an admin hitting this endpoint directly
+    (or navigating to the URL manually) could still create a personal
+    entry. Enforced server-side now specifically so a future frontend-only
+    regression (like the nav one) can't silently reopen this gap again.
+    """
+    admin = User(
+        username="admin_no_entries",
+        email="admin_no_entries@test.local",
+        password_hash="irrelevant-for-this-test",
+        role="admin",
+    )
+    db_session.add(admin)
+    db_session.commit()
+
+    service = EntryService(db_session)
+
+    with pytest.raises(ForbiddenError):
+        service.create_entry(
+            WorkEntryCreate(
+                project_id=seeded_project.id,
+                entry_date=date.today(),
+                start_time=time(9, 0),
+                end_time=time(12, 0),
+                hours_worked=Decimal("3"),
+            ),
+            current_user=admin,
+            ip_address="127.0.0.1",
+        )
 
 
 def test_admin_can_see_all_employees_entries(

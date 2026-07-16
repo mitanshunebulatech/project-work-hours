@@ -41,12 +41,13 @@ function PageFallback() {
   )
 }
 
-function ProtectedRoute({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
+function ProtectedRoute({ children, adminOnly = false, employeeOnly = false }: { children: React.ReactNode; adminOnly?: boolean; employeeOnly?: boolean }) {
   const { user, loading } = useAuth()
 
   if (loading) return <FullscreenSpinner />
   if (!user) return <Navigate to="/login" replace />
   if (adminOnly && user.role !== 'admin') return <Navigate to="/dashboard" replace />
+  if (employeeOnly && user.role === 'admin') return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }
 
@@ -65,7 +66,7 @@ function AppRoutes() {
             <Suspense fallback={<PageFallback />}>
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/timesheets" element={<Timesheets />} />
+                <Route path="/timesheets" element={<ProtectedRoute employeeOnly><Timesheets /></ProtectedRoute>} />
                 <Route path="/leave" element={<Leave />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/admin/timesheets" element={<ProtectedRoute adminOnly><AdminTimesheets /></ProtectedRoute>} />
