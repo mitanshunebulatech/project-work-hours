@@ -8,6 +8,7 @@ from app.models.audit_log import AuditLog
 from app.models.department import Department
 from app.models.employee_profile import EmployeeProfile
 from app.models.holiday import Holiday
+from app.models.identity_document import IdentityDocument
 from app.models.leave_balance import LeaveBalance
 from app.models.leave_ledger import LeaveLedgerEntry
 from app.models.leave_policy import LeavePolicy
@@ -40,5 +41,6 @@ __all__ = [
     "Role",
     "role_permissions",
     "EmployeeProfile",
+    "IdentityDocument",
     "WorkSchedulePolicy",
 ]

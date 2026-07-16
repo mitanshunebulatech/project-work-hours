@@ -87,7 +87,9 @@ def test_employee_profile_encrypted_pan_round_trips(db_session: Session) -> None
     profile = EmployeeProfile(
         user_id=user_id,
         department_id=dept.id,
-        full_name="Carol Employee",
+        employee_code="EMP-0001",
+        first_name="Carol",
+        last_name="Employee",
         pan_number="ABCDE1234F",
     )
     db_session.add(profile)
@@ -110,11 +112,13 @@ def test_employee_profile_unique_user_id(db_session: Session) -> None:
     db_session.add(user)
     db_session.commit()
 
-    db_session.add(EmployeeProfile(user_id=user.id, full_name="Dave One"))
+    db_session.add(EmployeeProfile(user_id=user.id, employee_code="EMP-0002", first_name="Dave"))
     db_session.commit()
 
     with pytest.raises(IntegrityError):
-        db_session.add(EmployeeProfile(user_id=user.id, full_name="Dave Duplicate"))
+        db_session.add(
+            EmployeeProfile(user_id=user.id, employee_code="EMP-0003", first_name="Dave2")
+        )
         db_session.commit()
 
 

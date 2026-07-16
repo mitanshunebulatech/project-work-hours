@@ -90,7 +90,10 @@ class EmployeeProfileResponse(BaseModel):
     id: int
     user_id: int
     department_id: int | None
+    employee_code: str
     full_name: str
+    first_name: str
+    last_name: str | None
     date_of_birth: date | None
     date_of_joining: date | None
     phone_number: str | None
@@ -107,7 +110,10 @@ class EmployeeProfileResponse(BaseModel):
             id=profile.id,
             user_id=profile.user_id,
             department_id=profile.department_id,
+            employee_code=profile.employee_code,
             full_name=profile.full_name,
+            first_name=profile.first_name,
+            last_name=profile.last_name,
             date_of_birth=profile.date_of_birth,
             date_of_joining=profile.date_of_joining,
             phone_number=profile.phone_number,
@@ -131,7 +137,10 @@ class MyProfileResponse(BaseModel):
     email: str | None
     role: str
     department_id: int | None = None
+    employee_code: str | None = None
     full_name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
     date_of_birth: date | None = None
     date_of_joining: date | None = None
     phone_number: str | None = None
@@ -149,7 +158,10 @@ class MyProfileResponse(BaseModel):
             email=user.email,
             role=user.role,
             department_id=profile.department_id if profile else None,
+            employee_code=profile.employee_code if profile else None,
             full_name=profile.full_name if profile else None,
+            first_name=profile.first_name if profile else None,
+            last_name=profile.last_name if profile else None,
             date_of_birth=profile.date_of_birth if profile else None,
             date_of_joining=profile.date_of_joining if profile else None,
             phone_number=profile.phone_number if profile else None,
