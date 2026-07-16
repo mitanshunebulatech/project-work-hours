@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { TableSkeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Plus, RefreshCw, Pencil, ClipboardList } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import { formatDate, titleCase } from '@/lib/utils'
 
 const STATUS_VARIANT: Record<string, any> = {
   pending: 'pending', approved: 'success', rejected: 'destructive'
@@ -197,7 +197,7 @@ export default function Timesheets() {
                       <td className="px-6 py-3.5 font-medium text-foreground">{e.project_name}</td>
                       <td className="px-6 py-3.5 text-foreground font-medium tabular-nums">{e.hours_worked}h</td>
                       <td className="px-6 py-3.5 text-muted-foreground max-w-[200px] truncate">{e.remarks || '—'}</td>
-                      <td className="px-6 py-3.5"><Badge variant={STATUS_VARIANT[e.status]} dot>{e.status}</Badge></td>
+                      <td className="px-6 py-3.5"><Badge variant={STATUS_VARIANT[e.status]} dot>{titleCase(e.status)}</Badge></td>
                       <td className="px-6 py-3.5 text-right">
                         {canEdit(e) && (
                           <button onClick={() => openEdit(e)} className="text-muted-foreground hover:text-nebula-600 transition-colors">

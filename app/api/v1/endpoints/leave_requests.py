@@ -48,7 +48,10 @@ def create_request(
     current_user: User = Depends(get_current_user),
 ) -> LeaveRequestResponse:
     created = LeaveService(db).create_request(
-        employee_id=current_user.id, payload=payload, ip_address=get_client_ip(request)
+        employee_id=current_user.id,
+        payload=payload,
+        ip_address=get_client_ip(request),
+        requester_is_admin="leave_requests:approve" in user_permission_codes(current_user),
     )
     return LeaveRequestResponse.model_validate(created)
 

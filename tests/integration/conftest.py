@@ -76,6 +76,22 @@ def _build_test_metadata() -> MetaData:
     Base.metadata.tables["leave_types"].to_metadata(test_metadata)
     Base.metadata.tables["leave_requests"].to_metadata(test_metadata)
 
+    # Item 4 (Leave Module): holidays and notifications. LeaveService.create_request()
+    # unconditionally calls HolidayRepository.get_holiday_dates_in_range() and
+    # both create_request() and approve_request() unconditionally call
+    # NotificationRepository via _notify_admins()/_notify_employee() — any
+    # real test of LeaveService needs both tables present, not just
+    # leave_requests/leave_types, or those calls fail with "no such table"
+    # before the business logic under test is even reached. Also cloning
+    # leave_policies, leave_balances, and leave_ledger since a full
+    # LeaveService test suite will need to exercise the paid-leave-type
+    # balance-debit branch, not just the no-policy path.
+    Base.metadata.tables["holidays"].to_metadata(test_metadata)
+    Base.metadata.tables["notifications"].to_metadata(test_metadata)
+    Base.metadata.tables["leave_policies"].to_metadata(test_metadata)
+    Base.metadata.tables["leave_balances"].to_metadata(test_metadata)
+    Base.metadata.tables["leave_ledger"].to_metadata(test_metadata)
+
     # Stand-in audit_logs: same shape as app/models/audit_log.py, with
     # SQLite-compatible types swapped in for JSONB/INET only.
     Table(

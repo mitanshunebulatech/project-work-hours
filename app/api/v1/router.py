@@ -23,6 +23,7 @@ from app.api.v1.endpoints import (
     reports,
     roles,
     users,
+    work_schedule_policy,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -45,3 +46,4 @@ api_router.include_router(leave_balances.router)
 api_router.include_router(notifications.router)
 api_router.include_router(departments.router)
 api_router.include_router(employees.router)
+api_router.include_router(work_schedule_policy.router)

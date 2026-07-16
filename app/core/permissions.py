@@ -43,6 +43,8 @@ ALL_PERMISSION_CODES: frozenset[str] = frozenset(
         "leave_ledger:manage",
         "leave_balances:view_all",
         "reports:view",
+        # Added by migration 0024 — see that migration's docstring.
+        "work_schedule:manage",
     }
 )
 

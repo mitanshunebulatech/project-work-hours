@@ -20,6 +20,7 @@ from app.models.refresh_token import RefreshToken
 from app.models.role import Role, role_permissions
 from app.models.user import User
 from app.models.work_entry import WorkEntry
+from app.models.work_schedule_policy import WorkSchedulePolicy
 
 __all__ = [
     "User",
@@ -39,4 +40,5 @@ __all__ = [
     "Role",
     "role_permissions",
     "EmployeeProfile",
+    "WorkSchedulePolicy",
 ]

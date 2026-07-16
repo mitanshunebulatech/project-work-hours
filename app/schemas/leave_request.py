@@ -4,8 +4,11 @@ app/schemas/leave_request.py
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+HalfDaySlot = Literal["first_half", "second_half"]
 
 
 class LeavePreviewRequest(BaseModel):
@@ -13,6 +16,7 @@ class LeavePreviewRequest(BaseModel):
     start_date: date
     end_date: date
     is_half_day: bool = False
+    half_day_slot: HalfDaySlot | None = None
 
     @model_validator(mode="after")
     def _validate_range(self) -> "LeavePreviewRequest":
@@ -20,6 +24,10 @@ class LeavePreviewRequest(BaseModel):
             raise ValueError("end_date cannot be before start_date")
         if self.is_half_day and self.end_date != self.start_date:
             raise ValueError("is_half_day only applies to a single-day request")
+        if self.is_half_day and self.half_day_slot is None:
+            raise ValueError("half_day_slot is required when is_half_day is true")
+        if not self.is_half_day and self.half_day_slot is not None:
+            raise ValueError("half_day_slot only applies when is_half_day is true")
         return self
 
 
@@ -44,6 +52,7 @@ class LeaveRequestCreate(BaseModel):
     start_date: date
     end_date: date
     is_half_day: bool = False
+    half_day_slot: HalfDaySlot | None = None
     reason: str = Field(min_length=3, max_length=2000)
     attachment_path: str | None = None  # populated by the endpoint after file upload (task 31)
 
@@ -53,6 +62,10 @@ class LeaveRequestCreate(BaseModel):
             raise ValueError("end_date cannot be before start_date")
         if self.is_half_day and self.end_date != self.start_date:
             raise ValueError("is_half_day only applies to a single-day request")
+        if self.is_half_day and self.half_day_slot is None:
+            raise ValueError("half_day_slot is required when is_half_day is true")
+        if not self.is_half_day and self.half_day_slot is not None:
+            raise ValueError("half_day_slot only applies when is_half_day is true")
         return self
 
 
@@ -77,6 +90,7 @@ class LeaveRequestResponse(BaseModel):
     start_date: date
     end_date: date
     is_half_day: bool
+    half_day_slot: HalfDaySlot | None
     working_days_count: Decimal
     reason: str
     status: str

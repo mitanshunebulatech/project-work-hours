@@ -27,3 +27,9 @@ export function toApiDateString(date: Date): string {
 export function formatHours(h: number | string) {
   return `${Number(h).toFixed(1)}h`
 }
+
+/** "pending" -> "Pending" — for displaying stored (lowercase) status enum
+ * values, without changing what's actually stored/filtered/indexed on. */
+export function titleCase(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
