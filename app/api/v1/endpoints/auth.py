@@ -8,7 +8,7 @@ from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.deps import get_current_user
+from app.core.deps import authenticate_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import (
@@ -40,7 +40,9 @@ def refresh(payload: RefreshRequest, db: Session = Depends(get_db)) -> AccessTok
 def logout(
     payload: RefreshRequest,
     db: Session = Depends(get_db),
-    _current_user: User = Depends(get_current_user),
+    # authenticate_user, not get_current_user (PM V2 Part 4): a locked-out
+    # account must still be able to log out.
+    _current_user: User = Depends(authenticate_user),
 ) -> MessageResponse:
     AuthService(db).logout(payload.refresh_token)
     return MessageResponse(message="Logged out successfully")
@@ -50,7 +52,10 @@ def logout(
 def change_password(
     payload: ChangePasswordRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    # authenticate_user, not get_current_user (PM V2 Part 4): this is the
+    # only way OUT of the must_change_password=True locked state, so it
+    # can't itself require the flag to already be false.
+    current_user: User = Depends(authenticate_user),
 ) -> MessageResponse:
     AuthService(db).change_password(current_user, payload)
     return MessageResponse(message="Password changed successfully")

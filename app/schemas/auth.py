@@ -28,11 +28,20 @@ class TokenResponse(BaseModel):
     refresh_token: str
     token_type: str = "bearer"
     role: str
+    # PM req (Part 4): frontend redirects to a forced-change screen instead
+    # of the dashboard when this is true. The backend enforces this
+    # independently too (see app/core/deps.py get_current_user) — this
+    # field is a UX convenience, not the actual security boundary.
+    must_change_password: bool = False
 
 
 class AccessTokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    # Included so a token refresh (e.g. on page reload) doesn't require an
+    # extra round-trip 403 before the frontend knows to show the forced-
+    # change screen again.
+    must_change_password: bool = False
 
 
 class RefreshRequest(BaseModel):
