@@ -90,6 +90,21 @@ class EntryService:
     def create_entry(
         self, payload: WorkEntryCreate, *, current_user: User, ip_address: str | None
     ) -> WorkEntryResponse:
+        # PM item 1/2: admins review timesheets, they don't submit their own —
+        # the Timesheet module was renamed and reworked around this
+        # assumption (Dashboard's "Missing Timesheets" widget, the admin
+        # Timesheets page being review-only, etc.). This was previously only
+        # enforced by hiding the nav link / not gating the /timesheets
+        # route — which meant an admin who navigated there directly (or hit
+        # this endpoint straight from a REST client) could still create a
+        # personal entry. Enforced here now so it can't be bypassed by
+        # anything client-side.
+        if current_user.is_admin:
+            raise ForbiddenError(
+                "Admin accounts do not submit personal timesheets — timesheets are reviewed, "
+                "not logged, from an admin account."
+            )
+
         project = self.project_repo.get(payload.project_id)
         if project is None or not project.is_active or project.deleted_at is not None:
             raise NotFoundError("Project not found or inactive")
