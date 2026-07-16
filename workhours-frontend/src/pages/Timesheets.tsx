@@ -24,8 +24,25 @@ export default function Timesheets() {
 
   const [form, setForm] = useState({
     project_id: '', entry_date: new Date().toISOString().slice(0, 10),
-    hours_worked: '', remarks: ''
+    start_time: '', end_time: '', hours_worked: '', remarks: ''
   })
+
+  /** Auto-fills Hours Worked from the time range, but leaves it editable —
+   * the backend doesn't require hours_worked to equal the raw duration
+   * (e.g. an unpaid lunch break shortens actual worked hours vs. clock time),
+   * so this is a convenience default, not a locked/computed field. */
+  const applyTimes = (start: string, end: string) => {
+    setForm(f => {
+      const next = { ...f, start_time: start, end_time: end }
+      if (start && end) {
+        const [sh, sm] = start.split(':').map(Number)
+        const [eh, em] = end.split(':').map(Number)
+        const diff = (eh * 60 + em - (sh * 60 + sm)) / 60
+        if (diff > 0) next.hours_worked = (Math.round(diff * 100) / 100).toString()
+      }
+      return next
+    })
+  }
 
   const load = async () => {
     setLoading(true)
@@ -44,14 +61,17 @@ export default function Timesheets() {
   useEffect(() => { load() }, [])
 
   const resetForm = () => {
-    setForm({ project_id: '', entry_date: new Date().toISOString().slice(0, 10), hours_worked: '', remarks: '' })
+    setForm({ project_id: '', entry_date: new Date().toISOString().slice(0, 10), start_time: '', end_time: '', hours_worked: '', remarks: '' })
     setShowForm(false)
     setEditEntry(null)
   }
 
   const handleSubmit = async () => {
-    if (!form.project_id || !form.hours_worked) {
+    if (!form.project_id || !form.start_time || !form.end_time || !form.hours_worked) {
       toast('Please fill all required fields', 'error'); return
+    }
+    if (form.end_time <= form.start_time) {
+      toast('End time must be after start time', 'error'); return
     }
     const hours = parseFloat(form.hours_worked)
     if (isNaN(hours) || hours <= 0 || hours > 24) {
@@ -60,10 +80,17 @@ export default function Timesheets() {
     setSubmitting(true)
     try {
       if (editEntry) {
-        await updateEntry(editEntry.id, { hours_worked: hours, remarks: form.remarks || null })
+        await updateEntry(editEntry.id, {
+          start_time: form.start_time, end_time: form.end_time,
+          hours_worked: hours, remarks: form.remarks || null
+        })
         toast('Entry updated successfully')
       } else {
-        await createEntry({ project_id: parseInt(form.project_id), entry_date: form.entry_date, hours_worked: hours, remarks: form.remarks || null })
+        await createEntry({
+          project_id: parseInt(form.project_id), entry_date: form.entry_date,
+          start_time: form.start_time, end_time: form.end_time,
+          hours_worked: hours, remarks: form.remarks || null
+        })
         toast('Entry submitted successfully')
       }
       resetForm(); load()
@@ -77,7 +104,11 @@ export default function Timesheets() {
 
   const openEdit = (entry: any) => {
     setEditEntry(entry)
-    setForm({ project_id: String(entry.project_id), entry_date: entry.entry_date, hours_worked: String(entry.hours_worked), remarks: entry.remarks || '' })
+    setForm({
+      project_id: String(entry.project_id), entry_date: entry.entry_date,
+      start_time: entry.start_time || '', end_time: entry.end_time || '',
+      hours_worked: String(entry.hours_worked), remarks: entry.remarks || ''
+    })
     setShowForm(true)
   }
 
@@ -133,20 +164,25 @@ export default function Timesheets() {
                   onChange={e => setForm(f => ({ ...f, entry_date: e.target.value }))} />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label>Start Time <span className="text-destructive">*</span></Label>
+                <Input type="time" value={form.start_time}
+                  onChange={e => applyTimes(e.target.value, form.end_time)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>End Time <span className="text-destructive">*</span></Label>
+                <Input type="time" value={form.end_time}
+                  onChange={e => applyTimes(form.start_time, e.target.value)} />
+              </div>
               <div className="space-y-1.5">
                 <Label>Hours Worked <span className="text-destructive">*</span></Label>
-                <Select value={form.hours_worked} onValueChange={v => setForm(f => ({ ...f, hours_worked: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select or type hours" /></SelectTrigger>
-                  <SelectContent>
-                    {['1','2','3','4','5','6','7','7.5','8','9','10','12'].map(h =>
-                      <SelectItem key={h} value={h}>{h} hours</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                <Input placeholder="Or type custom hours (e.g. 6.5)"
+                <Input type="number" step="0.25" min="0.25" max="24" placeholder="e.g. 7.5"
                   value={form.hours_worked}
                   onChange={e => setForm(f => ({ ...f, hours_worked: e.target.value }))} />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Remarks</Label>
                 <Textarea placeholder="What did you work on?" rows={2}
@@ -184,6 +220,7 @@ export default function Timesheets() {
                   <tr className="border-b bg-muted/40">
                     <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Date</th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Project</th>
+                    <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Time</th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Hours</th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Remarks</th>
                     <th className="text-left px-6 py-3 text-xs font-medium text-muted-foreground">Status</th>
@@ -195,6 +232,9 @@ export default function Timesheets() {
                     <tr key={e.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
                       <td className="px-6 py-3.5 text-muted-foreground whitespace-nowrap">{formatDate(e.entry_date)}</td>
                       <td className="px-6 py-3.5 font-medium text-foreground">{e.project_name}</td>
+                      <td className="px-6 py-3.5 text-muted-foreground text-xs whitespace-nowrap">
+                        {e.start_time && e.end_time ? `${e.start_time.slice(0, 5)}\u2013${e.end_time.slice(0, 5)}` : '—'}
+                      </td>
                       <td className="px-6 py-3.5 text-foreground font-medium tabular-nums">{e.hours_worked}h</td>
                       <td className="px-6 py-3.5 text-muted-foreground max-w-[200px] truncate">{e.remarks || '—'}</td>
                       <td className="px-6 py-3.5"><Badge variant={STATUS_VARIANT[e.status]} dot>{titleCase(e.status)}</Badge></td>
