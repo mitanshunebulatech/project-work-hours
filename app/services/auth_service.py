@@ -53,6 +53,7 @@ class AuthService:
             access_token=access_token,
             refresh_token=raw_refresh_token,
             role=user.role,
+            must_change_password=user.must_change_password,
         )
 
     def refresh(self, raw_refresh_token: str) -> AccessTokenResponse:
@@ -73,7 +74,9 @@ class AuthService:
             raise UnauthorizedError("User not found or inactive")
 
         new_access_token = create_access_token(user.id, user.role)
-        return AccessTokenResponse(access_token=new_access_token)
+        return AccessTokenResponse(
+            access_token=new_access_token, must_change_password=user.must_change_password
+        )
 
     def logout(self, raw_refresh_token: str) -> None:
         self.token_repo.revoke_by_raw_token(raw_refresh_token)
@@ -84,6 +87,11 @@ class AuthService:
             raise BusinessRuleError("Current password is incorrect")
 
         current_user.password_hash = hash_password(payload.new_password)
+        # PM req (Part 4): this is the only way a must_change_password=True
+        # account gets unlocked. Cleared unconditionally on any successful
+        # change, not just the forced-first-login case — a normal voluntary
+        # password change should never leave a stray True behind either.
+        current_user.must_change_password = False
         self.user_repo.update(current_user)
         # Force re-login everywhere after a password change
         self.token_repo.revoke_all_for_user(current_user.id)

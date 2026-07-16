@@ -31,10 +31,21 @@ from app.models.user import User
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-def get_current_user(
+def authenticate_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> User:
+    """
+    Raw JWT authentication only — deliberately does NOT enforce
+    must_change_password (see get_current_user below for that). Used
+    directly, instead of get_current_user, by exactly the two endpoints
+    that must stay reachable even when a password change is pending:
+    POST /auth/change-password (the only way OUT of the locked state) and
+    POST /auth/logout (a locked-out user should still be able to log out
+    rather than being stuck with no escape but waiting for the token to
+    expire). Every other endpoint in the app should depend on
+    get_current_user, not this function directly.
+    """
     if not credentials:
         raise UnauthorizedError("Not authenticated")
 
@@ -54,6 +65,22 @@ def get_current_user(
     if user is None or user.deleted_at is not None or not user.is_active:
         raise UnauthorizedError("User not found or inactive")
 
+    return user
+
+
+def get_current_user(user: User = Depends(authenticate_user)) -> User:
+    """
+    The default auth dependency — nearly every endpoint in the app depends
+    on this, not authenticate_user directly. Wraps authenticate_user with
+    must_change_password enforcement (PM V2 req, Part 4): a account with
+    must_change_password=True gets a 403 from every endpoint except the
+    two that use authenticate_user directly instead of this wrapper.
+    Checked live against the DB on every request (not baked into the JWT),
+    so clearing the flag via POST /auth/change-password takes effect
+    immediately without needing a fresh access token.
+    """
+    if user.must_change_password:
+        raise ForbiddenError("Password change required before continuing")
     return user
 
 

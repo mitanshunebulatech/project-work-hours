@@ -92,6 +92,12 @@ def _build_test_metadata() -> MetaData:
     Base.metadata.tables["leave_balances"].to_metadata(test_metadata)
     Base.metadata.tables["leave_ledger"].to_metadata(test_metadata)
 
+    # Part 4 (must_change_password): AuthService.login()/logout()/
+    # change_password() all touch refresh_tokens (create/revoke). Portable
+    # column types only (Integer/Text/DateTime/Boolean), same reasoning as
+    # the departments/employee_profiles addition above — no stand-in needed.
+    Base.metadata.tables["refresh_tokens"].to_metadata(test_metadata)
+
     # Stand-in audit_logs: same shape as app/models/audit_log.py, with
     # SQLite-compatible types swapped in for JSONB/INET only.
     Table(
