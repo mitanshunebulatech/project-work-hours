@@ -15,6 +15,7 @@ from app.schemas.employee_profile import (
     EmployeeProfileResponse,
     EmployeeProfileSelfUpdate,
 )
+from app.utils.name_utils import split_full_name
 
 # Fields where the *value itself* must never be written into audit_logs
 # (before_data/after_data are stored as JSON and would otherwise persist a
@@ -105,10 +106,13 @@ class EmployeeProfileService:
         if self.profile_repo.get_by_user_id(payload.user_id):
             raise ConflictError("An employee profile already exists for this user")
 
+        first_name, last_name = split_full_name(payload.full_name)
         profile = EmployeeProfile(
             user_id=payload.user_id,
+            employee_code=self.profile_repo.generate_next_employee_code(),
             department_id=payload.department_id,
-            full_name=payload.full_name,
+            first_name=first_name,
+            last_name=last_name,
             date_of_birth=payload.date_of_birth,
             date_of_joining=payload.date_of_joining,
             phone_number=payload.phone_number,
@@ -124,6 +128,7 @@ class EmployeeProfileService:
             record_id=created.id,
             after_data={
                 "user_id": created.user_id,
+                "employee_code": created.employee_code,
                 "full_name": created.full_name,
                 "department_id": created.department_id,
                 "pan_number": _redact("pan_number", created.pan_number),
@@ -148,7 +153,7 @@ class EmployeeProfileService:
         }
 
         if payload.full_name is not None:
-            profile.full_name = payload.full_name
+            profile.first_name, profile.last_name = split_full_name(payload.full_name)
         if payload.department_id is not None:
             profile.department_id = payload.department_id
         if payload.date_of_birth is not None:
