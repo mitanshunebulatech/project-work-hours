@@ -3,7 +3,8 @@ import type { DateRange } from 'react-day-picker'
 import { useToast } from '@/hooks/useToast'
 import {
   getLeaveTypes, getMyLeaveBalances, getMyLeaveRequests, previewLeaveRequest,
-  createLeaveRequest, uploadLeaveAttachment, downloadLeaveAttachment, cancelLeaveRequest
+  createLeaveRequest, uploadLeaveAttachment, downloadLeaveAttachment, cancelLeaveRequest,
+  getWorkSchedulePolicy
 } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle, Badge, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem, Textarea } from '@/components/ui/misc'
 import { Button } from '@/components/ui/button'
@@ -11,10 +12,20 @@ import { LeaveDateRangePicker } from '@/components/ui/date-range-picker'
 import { CardGridSkeleton, TableSkeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { CalendarPlus, Paperclip, Plane, RefreshCw, X, CalendarClock, AlertTriangle, Download } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import { formatDate, titleCase } from '@/lib/utils'
 
 const STATUS_VARIANT: Record<string, any> = {
   pending: 'pending', approved: 'success', rejected: 'destructive', cancelled: 'secondary'
+}
+
+
+/** "16:00:00" -> "4:00 PM" — the policy endpoint returns 24h "HH:MM:SS" times. */
+function formatTime12h(t: string) {
+  const [hStr, mStr] = t.split(':')
+  const h = parseInt(hStr, 10)
+  const period = h >= 12 ? 'PM' : 'AM'
+  const h12 = h % 12 === 0 ? 12 : h % 12
+  return `${h12}:${mStr} ${period}`
 }
 
 /** Local (not UTC) yyyy-MM-dd — avoids the timezone-shift bug that
@@ -44,6 +55,8 @@ export default function Leave() {
   const [leaveTypeId, setLeaveTypeId] = useState('')
   const [range, setRange] = useState<DateRange | undefined>()
   const [isHalfDay, setIsHalfDay] = useState(false)
+  const [halfDaySlot, setHalfDaySlot] = useState<'first_half' | 'second_half' | null>(null)
+  const [workSchedule, setWorkSchedule] = useState<any>(null)
   const [reason, setReason] = useState('')
   const [attachmentPath, setAttachmentPath] = useState<string | null>(null)
   const [attachmentName, setAttachmentName] = useState<string | null>(null)
@@ -59,14 +72,16 @@ export default function Leave() {
   const load = async () => {
     setLoading(true)
     try {
-      const [typesRes, balancesRes, requestsRes] = await Promise.all([
+      const [typesRes, balancesRes, requestsRes, scheduleRes] = await Promise.all([
         getLeaveTypes(),
         getMyLeaveBalances(),
-        getMyLeaveRequests({ page: 1, size: 50 })
+        getMyLeaveRequests({ page: 1, size: 50 }),
+        getWorkSchedulePolicy()
       ])
       setLeaveTypes(typesRes.data)
       setBalances(balancesRes.data)
       setRequests(requestsRes.data.items)
+      setWorkSchedule(scheduleRes.data)
     } finally {
       setLoading(false)
     }
@@ -79,6 +94,7 @@ export default function Leave() {
     setLeaveTypeId('')
     setRange(undefined)
     setIsHalfDay(false)
+    setHalfDaySlot(null)
     setReason('')
     setAttachmentPath(null)
     setAttachmentName(null)
@@ -112,6 +128,9 @@ export default function Leave() {
     if (!leaveTypeId || !range?.from) {
       toast('Select a leave type and date range first', 'error'); return
     }
+    if (isHalfDay && !halfDaySlot) {
+      toast('Select a half-day slot first', 'error'); return
+    }
     setPreviewing(true)
     setPreview(null)
     try {
@@ -119,7 +138,8 @@ export default function Leave() {
         leave_type_id: parseInt(leaveTypeId),
         start_date: toISODate(range.from),
         end_date: toISODate(range.to || range.from),
-        is_half_day: isHalfDay
+        is_half_day: isHalfDay,
+        half_day_slot: isHalfDay ? halfDaySlot : null
       })
       setPreview(res.data)
     } catch (err: any) {
@@ -132,6 +152,9 @@ export default function Leave() {
   const handleSubmit = async () => {
     if (!leaveTypeId || !range?.from) {
       toast('Select a leave type and date range first', 'error'); return
+    }
+    if (isHalfDay && !halfDaySlot) {
+      toast('Select a half-day slot first', 'error'); return
     }
     if (!reason || reason.trim().length < 3) {
       toast('Please enter a reason (at least 3 characters)', 'error'); return
@@ -146,6 +169,7 @@ export default function Leave() {
         start_date: toISODate(range.from),
         end_date: toISODate(range.to || range.from),
         is_half_day: isHalfDay,
+        half_day_slot: isHalfDay ? halfDaySlot : null,
         reason: reason.trim(),
         attachment_path: attachmentPath
       })
@@ -251,12 +275,28 @@ export default function Leave() {
             </div>
 
             {selectedType?.allows_half_day && range?.from && (!range.to || range.to.getTime() === range.from.getTime()) && (
-              <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer w-fit">
-                <input type="checkbox" checked={isHalfDay}
-                  onChange={e => { setIsHalfDay(e.target.checked); setPreview(null) }}
-                  className="rounded border-input" />
-                Half day
-              </label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm text-foreground cursor-pointer w-fit">
+                  <input type="checkbox" checked={isHalfDay}
+                    onChange={e => { setIsHalfDay(e.target.checked); setHalfDaySlot(null); setPreview(null) }}
+                    className="rounded border-input" />
+                  Half day
+                </label>
+                {isHalfDay && workSchedule && (
+                  <div className="flex gap-3 pl-1">
+                    <label className="flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
+                      <input type="radio" name="half-day-slot" checked={halfDaySlot === 'first_half'}
+                        onChange={() => { setHalfDaySlot('first_half'); setPreview(null) }} />
+                      First half ({formatTime12h(workSchedule.first_half_start)}–{formatTime12h(workSchedule.first_half_end)})
+                    </label>
+                    <label className="flex items-center gap-1.5 text-sm text-foreground cursor-pointer">
+                      <input type="radio" name="half-day-slot" checked={halfDaySlot === 'second_half'}
+                        onChange={() => { setHalfDaySlot('second_half'); setPreview(null) }} />
+                      Second half ({formatTime12h(workSchedule.second_half_start)}–{formatTime12h(workSchedule.second_half_end)})
+                    </label>
+                  </div>
+                )}
+              </div>
             )}
 
             <div className="space-y-1.5">
@@ -308,7 +348,7 @@ export default function Leave() {
               <Button size="sm" variant="outline" onClick={handlePreview} loading={previewing}>
                 <CalendarClock size={14} /> Preview
               </Button>
-              <Button size="sm" onClick={handleSubmit} loading={submitting} disabled={!preview}>
+              <Button size="sm" onClick={handleSubmit} loading={submitting}>
                 Submit Request
               </Button>
               <Button size="sm" variant="ghost" onClick={resetForm}>Cancel</Button>
@@ -316,6 +356,13 @@ export default function Leave() {
 
             {preview && (
               <div className="rounded-lg border bg-muted/30 p-4 space-y-2 text-sm animate-in fade-in duration-200">
+                <div className="flex flex-wrap gap-x-6 gap-y-1.5 pb-2 border-b border-border/60">
+                  <span><span className="text-muted-foreground">Type:</span> <span className="font-medium text-foreground">{selectedType?.display_name}</span></span>
+                  <span><span className="text-muted-foreground">Dates:</span> <span className="font-medium text-foreground">{range?.from && formatDate(toISODate(range.from))}{range?.from && range?.to && range.to.getTime() !== range.from.getTime() ? ` – ${formatDate(toISODate(range.to))}` : ''}</span></span>
+                  {isHalfDay && (
+                    <span><span className="text-muted-foreground">Half day:</span> <span className="font-medium text-foreground">{halfDaySlot === 'first_half' ? 'First half' : 'Second half'}</span></span>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-x-6 gap-y-1.5">
                   <span><span className="text-muted-foreground">Working days:</span> <span className="font-medium text-foreground">{Number(preview.working_days_count).toFixed(2)}</span></span>
                   {preview.current_balance !== null && (
@@ -376,7 +423,7 @@ export default function Leave() {
                         <td className="px-6 py-3.5 font-medium text-foreground">{type?.display_name || `#${r.leave_type_id}`}</td>
                         <td className="px-6 py-3.5 text-foreground tabular-nums">{Number(r.working_days_count).toFixed(2)}</td>
                         <td className="px-6 py-3.5 text-muted-foreground max-w-[220px] truncate">{r.reason}</td>
-                        <td className="px-6 py-3.5"><Badge variant={STATUS_VARIANT[r.status]} dot>{r.status}</Badge></td>
+                        <td className="px-6 py-3.5"><Badge variant={STATUS_VARIANT[r.status]} dot>{titleCase(r.status)}</Badge></td>
                         <td className="px-6 py-3.5 text-right whitespace-nowrap">
                           <div className="flex items-center justify-end gap-2">
                             {r.attachment_path && (

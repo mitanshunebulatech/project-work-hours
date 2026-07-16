@@ -229,12 +229,26 @@ class LeaveService:
         employee_id: int,
         payload: LeaveRequestCreate,
         ip_address: str | None = None,
+        requester_is_admin: bool = False,
     ) -> LeaveRequest:
         """
         Runs the same calculation as preview_request(), but every warning
         there becomes a hard BusinessRuleError/ConflictError here. No
         ledger/balance write happens in this method (BR-05) — the request
         is saved as 'pending' only.
+
+        Item 4 (PM requirement): "Admin should only manage Admin's own
+        leave." approve_request() deliberately blocks self-approval as an
+        internal control — which means, with only one admin, an admin's own
+        leave request would sit pending forever with no one able to approve
+        it. Decision: an admin's own leave request auto-approves immediately
+        on submission, with an audit log entry recording that it was
+        self-submitted-and-auto-approved (a real, visible trail — not a
+        silent bypass). requester_is_admin is computed by the caller from
+        the permission system (leave_requests:approve), not from this
+        service re-deriving role/permission logic itself — same boundary
+        used everywhere else in this file (is_admin params on
+        cancel_request/get_attachment_path).
         """
         leave_type = self._get_active_leave_type(payload.leave_type_id)
 
@@ -327,6 +341,7 @@ class LeaveService:
             start_date=payload.start_date,
             end_date=payload.end_date,
             is_half_day=payload.is_half_day,
+            half_day_slot=payload.half_day_slot,
             working_days_count=working_days_count,
             reason=payload.reason,
             status="pending",
@@ -349,6 +364,21 @@ class LeaveService:
             ip_address=ip_address,
         )
         self.db.commit()
+
+        if requester_is_admin:
+            # Auto-approve: reviewer_id == employee_id is deliberate here —
+            # this is the one place in the codebase where "self-approval" is
+            # intentional, not a bypass of approve_request()'s guard (that
+            # guard still applies to every request submitted THROUGH the
+            # approve endpoint; this is a different code path entirely).
+            return self._finalize_approval(
+                request=created,
+                leave_type=leave_type,
+                reviewer_id=employee_id,
+                admin_comment="Auto-approved — admin self-submitted leave",
+                ip_address=ip_address,
+                notify_employee=False,  # the requester IS the employee; nothing to notify them of
+            )
 
         self._notify_admins(
             type_=NOTIFICATION_TYPE_SUBMITTED,
@@ -511,6 +541,39 @@ class LeaveService:
         if leave_type is None:
             raise NotFoundError("Leave type for this request no longer exists")
 
+        return self._finalize_approval(
+            request=request,
+            leave_type=leave_type,
+            reviewer_id=admin_user_id,
+            admin_comment=admin_comment,
+            ip_address=ip_address,
+        )
+
+    def _finalize_approval(
+        self,
+        *,
+        request: LeaveRequest,
+        leave_type: LeaveType,
+        reviewer_id: int,
+        admin_comment: str | None,
+        ip_address: str | None,
+        notify_employee: bool = True,
+    ) -> LeaveRequest:
+        """
+        The actual mechanics of turning a pending request into an approved
+        one: balance re-check + debit + ledger entry (if the type is paid
+        and has a policy row), status/reviewer/timestamp update, audit log,
+        commit, and notification. Extracted from approve_request() so the
+        exact same, already-tested path is reused by create_request()'s
+        admin-self-request auto-approval branch (Item 4) — two entry
+        points, one mechanism, no duplicated ledger-debit logic to drift
+        out of sync.
+
+        Callers are responsible for their own idempotency/authorization
+        guards (pending-only, self-approval rules, etc.) before calling
+        this — this method assumes the caller has already decided the
+        approval should happen.
+        """
         if leave_type.is_paid:
             policy = self.leave_policy_repo.get_for_type_year(
                 leave_type_id=leave_type.id, year=request.start_date.year
@@ -543,28 +606,29 @@ class LeaveService:
 
         before_status = request.status
         request.status = "approved"
-        request.reviewed_by = admin_user_id
+        request.reviewed_by = reviewer_id
         request.reviewed_at = datetime.now(timezone.utc)
         request.admin_comment = admin_comment
         self.leave_request_repo.update(request)
 
         self.audit_repo.log(
-            actor_id=admin_user_id,
+            actor_id=reviewer_id,
             table_name="leave_requests",
             operation="UPDATE",
             record_id=request.id,
             before_data={"status": before_status},
-            after_data={"status": "approved", "reviewed_by": admin_user_id},
+            after_data={"status": "approved", "reviewed_by": reviewer_id},
             ip_address=ip_address,
         )
         self.db.commit()
 
-        self._notify_employee(
-            employee_id=request.employee_id,
-            type_=NOTIFICATION_TYPE_APPROVED,
-            reference_id=request.id,
-            message=f"Your leave request #{request.id} was approved",
-        )
+        if notify_employee:
+            self._notify_employee(
+                employee_id=request.employee_id,
+                type_=NOTIFICATION_TYPE_APPROVED,
+                reference_id=request.id,
+                message=f"Your leave request #{request.id} was approved",
+            )
 
         return request
 

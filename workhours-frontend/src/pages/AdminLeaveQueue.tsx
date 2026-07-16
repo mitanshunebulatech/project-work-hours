@@ -15,7 +15,7 @@ import {
   RefreshCw, Check, X, Paperclip, ClipboardList,
   Download as DownloadIcon, Eye, Wallet, History, CalendarClock, PieChart
 } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import { formatDate, titleCase } from '@/lib/utils'
 
 const STATUS_VARIANT: Record<string, any> = {
   pending: 'pending', approved: 'success', rejected: 'destructive', cancelled: 'secondary'
@@ -23,7 +23,6 @@ const STATUS_VARIANT: Record<string, any> = {
 
 // PM req #4: status values render in title case regardless of the raw
 // lowercase value the API returns (pending/approved/rejected/cancelled).
-const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function AdminLeaveQueue() {
   const { toast } = useToast()

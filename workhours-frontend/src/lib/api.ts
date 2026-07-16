@@ -119,13 +119,22 @@ export const getEmployeeLeaveBalances = (employeeId: number, year?: number) =>
 
 // --- Leave Requests ---
 export const previewLeaveRequest = (data: {
-  leave_type_id: number; start_date: string; end_date: string; is_half_day?: boolean
+  leave_type_id: number; start_date: string; end_date: string
+  is_half_day?: boolean; half_day_slot?: 'first_half' | 'second_half' | null
 }) => api.post('/leave-requests/preview', data)
 
 export const createLeaveRequest = (data: {
   leave_type_id: number; start_date: string; end_date: string
-  is_half_day?: boolean; reason: string; attachment_path?: string | null
+  is_half_day?: boolean; half_day_slot?: 'first_half' | 'second_half' | null
+  reason: string; attachment_path?: string | null
 }) => api.post('/leave-requests', data)
+
+// --- Work Schedule Policy ---
+export const getWorkSchedulePolicy = () => api.get('/work-schedule-policy')
+export const updateWorkSchedulePolicy = (data: {
+  first_half_start: string; first_half_end: string
+  second_half_start: string; second_half_end: string
+}) => api.patch('/work-schedule-policy', data)
 
 export const uploadLeaveAttachment = (file: File) => {
   const formData = new FormData()

@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import {
   Clock, AlertCircle, Plane, CalendarDays, UserX, Activity, Inbox, ArrowRight,
 } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import { formatDate, titleCase } from '@/lib/utils'
 
 /**
  * Admin dashboard is operations-focused per PM req #1: no "My Timesheets"
@@ -25,8 +25,6 @@ import { formatDate } from '@/lib/utils'
 
 const statusVariant = (s: string) =>
   s === 'approved' ? 'success' : s === 'pending' ? 'pending' : s === 'rejected' ? 'destructive' : 'secondary'
-
-const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 function AdminDashboard() {
   const { toast } = useToast()

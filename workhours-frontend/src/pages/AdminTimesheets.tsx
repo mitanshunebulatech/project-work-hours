@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { SingleDatePicker } from '@/components/ui/date-picker'
 import { MultiSelectPopover, type MultiSelectOption } from '@/components/ui/multi-select-popover'
 import { RefreshCw, Check, X, Trash2, Download, Inbox, Eye, Search } from 'lucide-react'
-import { formatDate, toApiDateString } from '@/lib/utils'
+import { formatDate, toApiDateString, titleCase } from '@/lib/utils'
 
 const STATUS_VARIANT: Record<string, any> = {
   pending: 'pending', approved: 'success', rejected: 'destructive'
@@ -257,7 +257,7 @@ export default function AdminTimesheets() {
                           <Eye size={14} />
                         </button>
                       </td>
-                      <td className="px-5 py-3.5"><Badge variant={STATUS_VARIANT[e.status]} dot>{e.status}</Badge></td>
+                      <td className="px-5 py-3.5"><Badge variant={STATUS_VARIANT[e.status]} dot>{titleCase(e.status)}</Badge></td>
                       <td className="px-5 py-3.5">
                         <div className="flex items-center justify-end gap-1">
                           {e.status === 'pending' && (
