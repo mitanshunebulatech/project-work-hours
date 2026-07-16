@@ -55,6 +55,34 @@ class Settings(BaseSettings):
     MAX_ATTACHMENT_SIZE_MB: int = 10
     ALLOWED_ATTACHMENT_EXTENSIONS: list[str] = [".pdf", ".jpg", ".jpeg", ".png", ".docx"]
 
+    # --- Identity documents (Aadhaar/PAN/Passport/Other) ---
+    # Encrypted at rest on disk (see app/utils/secure_file_storage.py) — separate
+    # directory from leave attachments since these are higher-sensitivity files.
+    IDENTITY_DOCS_DIR: str = "uploads/identity_documents"
+    MAX_IDENTITY_DOC_SIZE_MB: int = 10
+    ALLOWED_IDENTITY_DOC_EXTENSIONS: list[str] = [".pdf", ".jpg", ".jpeg", ".png"]
+
+    # --- Profile pictures ---
+    # Not encrypted — a photo isn't sensitive PII the way PAN/Aadhaar/Passport
+    # are, same posture as other non-sensitive file paths in this app.
+    PROFILE_PICTURES_DIR: str = "uploads/profile_pictures"
+    MAX_PROFILE_PICTURE_SIZE_MB: int = 5
+    ALLOWED_PROFILE_PICTURE_EXTENSIONS: list[str] = [".jpg", ".jpeg", ".png"]
+
+    # --- Email (onboarding welcome message, etc.) ---
+    # Plain SMTP via the stdlib smtplib — works with any provider (Gmail app
+    # password, a self-hosted Postfix/Mailhog box, SES/SendGrid's SMTP
+    # interface, etc.) without locking the app to a specific vendor SDK.
+    # SMTP_HOST empty means "not configured" — EmailService logs and no-ops
+    # instead of failing onboarding outright when nobody's set this up yet.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_USE_TLS: bool = True
+    SMTP_FROM_ADDRESS: str = "noreply@workhours.local"
+    SMTP_FROM_NAME: str = "WorkHours Enterprise"
+
 
 @lru_cache
 def get_settings() -> Settings:

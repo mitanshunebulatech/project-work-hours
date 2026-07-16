@@ -20,6 +20,24 @@ def _get_fernet() -> Fernet:
     return Fernet(settings.FIELD_ENCRYPTION_KEY.encode())
 
 
+def encrypt_bytes(data: bytes) -> bytes:
+    """
+    Encrypts raw bytes with the same Fernet key used for field-level
+    encryption (EncryptedString). Used by app/utils/secure_file_storage.py
+    to encrypt identity-document files at rest — one key, one place that
+    reads it, instead of a second encryption setup to manage.
+    """
+    return _get_fernet().encrypt(data)
+
+
+def decrypt_bytes(token: bytes) -> bytes:
+    """Inverse of encrypt_bytes. Raises ValueError on a wrong/rotated key."""
+    try:
+        return _get_fernet().decrypt(token)
+    except InvalidToken as exc:
+        raise ValueError("Unable to decrypt file — encryption key mismatch") from exc
+
+
 class EncryptedString(TypeDecorator):
     """
     Transparently encrypts on write / decrypts on read. Stored ciphertext is

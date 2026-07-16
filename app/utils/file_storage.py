@@ -1,11 +1,13 @@
 """
 app/utils/file_storage.py
 
-Local-disk storage for leave-request attachments. Deliberately not S3/cloud —
-there's no cloud SDK or credentials anywhere in this project yet, so that
-would be a much larger, unrelated infrastructure change. This keeps the same
-"local disk, swap later" posture the rest of the app uses (e.g. SQLite-free,
-single Postgres instance).
+Local-disk storage for leave-request attachments and profile pictures —
+i.e. files that don't need encryption at rest (see
+app/utils/secure_file_storage.py for identity documents, which do).
+Deliberately not S3/cloud — there's no cloud SDK or credentials anywhere in
+this project yet, so that would be a much larger, unrelated infrastructure
+change. This keeps the same "local disk, swap later" posture the rest of
+the app uses (e.g. SQLite-free, single Postgres instance).
 
 Security notes:
 - The original filename is NEVER trusted for the on-disk name (path traversal,
@@ -82,3 +84,65 @@ def resolve_attachment_path(attachment_path: str) -> Path:
         raise ValidationError("Invalid attachment path")
 
     return candidate
+
+
+# --- Profile pictures ---
+# Same pattern as leave attachments above, but not encrypted — a profile
+# photo isn't sensitive PII the way PAN/Aadhaar/Passport are (see
+# app/utils/secure_file_storage.py for the encrypted identity-document
+# equivalent).
+
+MAX_PROFILE_PICTURE_BYTES = settings.MAX_PROFILE_PICTURE_SIZE_MB * 1024 * 1024
+
+
+def _profile_picture_dir() -> Path:
+    upload_dir = Path(settings.PROFILE_PICTURES_DIR)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    return upload_dir
+
+
+def save_profile_picture_file(file: UploadFile) -> str:
+    """
+    Validates extension + size, writes under a fresh UUID name, and returns
+    the relative path to store on EmployeeProfile.profile_picture_path.
+    """
+    original_name = file.filename or ""
+    extension = Path(original_name).suffix.lower()
+
+    if extension not in settings.ALLOWED_PROFILE_PICTURE_EXTENSIONS:
+        allowed = ", ".join(settings.ALLOWED_PROFILE_PICTURE_EXTENSIONS)
+        raise ValidationError(f"Unsupported file type '{extension}'. Allowed types: {allowed}")
+
+    contents = file.file.read()
+    if len(contents) > MAX_PROFILE_PICTURE_BYTES:
+        raise ValidationError(
+            f"File exceeds the maximum allowed size of {settings.MAX_PROFILE_PICTURE_SIZE_MB}MB"
+        )
+    if len(contents) == 0:
+        raise ValidationError("Uploaded file is empty")
+
+    stored_name = f"{uuid.uuid4().hex}{extension}"
+    destination = _profile_picture_dir() / stored_name
+    destination.write_bytes(contents)
+
+    return f"{Path(settings.PROFILE_PICTURES_DIR).name}/{stored_name}"
+
+
+def resolve_profile_picture_path(picture_path: str) -> Path:
+    """Same traversal defense as resolve_attachment_path, scoped to the
+    profile-pictures directory."""
+    base_dir = Path(settings.PROFILE_PICTURES_DIR).resolve()
+    stored_name = Path(picture_path).name
+    candidate = (base_dir / stored_name).resolve()
+
+    if base_dir not in candidate.parents and candidate != base_dir:
+        raise ValidationError("Invalid profile picture path")
+
+    return candidate
+
+
+def delete_profile_picture_file(picture_path: str) -> None:
+    """Removes the old picture from disk when replaced/removed. Silently
+    no-ops if it's already gone."""
+    candidate = resolve_profile_picture_path(picture_path)
+    candidate.unlink(missing_ok=True)
