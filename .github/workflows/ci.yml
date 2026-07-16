@@ -1,0 +1,87 @@
+name: CI
+
+# Runs automatically on every PR into main, and on every push to any branch.
+# This replaces "remember to run pytest/tsc/build by hand before pushing" with
+# something that can't be skipped or forgotten — GitHub will show a red X on
+# the PR itself if any of this fails, and branch protection (set up in repo
+# Settings, see docs/BRANCH_PROTECTION.md) can require it to pass before merge.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: ["**"]
+
+jobs:
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # full history, so gitleaks checks every commit in the push/PR, not just the tip
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Catches real credentials (DB passwords, API keys, private keys) committed
+        # anywhere in the diff — this is the automated version of the .env.example
+        # incident: it would have failed this PR loudly instead of merging silently.
+
+  backend:
+    name: Backend (migrations + pytest)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: workhours
+          POSTGRES_PASSWORD: workhours
+          POSTGRES_DB: workhours_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql+psycopg2://workhours:workhours@localhost:5432/workhours_db
+      SECRET_KEY: ci-test-secret-key
+      FIELD_ENCRYPTION_KEY: "yBz1v1yjJhZDLQhP0oXFyOTb3-6L2gk4z4qz9c4Q4mA="
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run migrations against a real Postgres
+        run: python -m alembic upgrade head
+      - name: Confirm migration head
+        run: |
+          CURRENT=$(python -m alembic current)
+          echo "$CURRENT"
+          echo "$CURRENT" | grep -q "(head)" || (echo "::error::alembic is not at head after upgrade" && exit 1)
+      - name: Run test suite
+        run: python -m pytest tests/ -v
+
+  frontend:
+    name: Frontend (typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: workhours-frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: workhours-frontend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Production build
+        run: npm run build
