@@ -31,7 +31,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex bg-slate-50">
+    <div className="min-h-screen flex bg-background">
       {/* Left panel — brand */}
       <div className="hidden lg:flex flex-col justify-between w-[460px] shrink-0 p-10 relative overflow-hidden bg-nebula-mesh">
         <div className="absolute inset-0 bg-grid opacity-40" />
@@ -80,13 +80,13 @@ export default function Login() {
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-nebula-500 to-nebula-700 flex items-center justify-center">
               <Clock size={16} className="text-white" />
             </div>
-            <span className="font-display font-semibold text-base text-slate-900">WorkHours</span>
+            <span className="font-display font-semibold text-base text-foreground">WorkHours</span>
           </div>
 
-          <div className="rounded-2xl border border-slate-200/80 bg-white shadow-elevated p-8">
+          <div className="rounded-2xl border bg-card shadow-elevated p-8">
             <div className="mb-7">
-              <h1 className="text-xl font-display font-semibold text-slate-900 mb-1">Welcome back</h1>
-              <p className="text-sm text-slate-500">Sign in to your account to continue</p>
+              <h1 className="text-xl font-display font-semibold text-foreground mb-1">Welcome back</h1>
+              <p className="text-sm text-muted-foreground">Sign in to your account to continue</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -128,25 +128,25 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setShowPw(p => !p)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                   >
                     {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
                   </button>
                 </div>
               </div>
 
-              <label className="flex items-center gap-2 text-sm text-slate-600 select-none cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-muted-foreground select-none cursor-pointer">
                 <input
                   type="checkbox"
                   checked={remember}
                   onChange={e => setRemember(e.target.checked)}
-                  className="h-3.5 w-3.5 rounded border-slate-300 text-nebula-600 focus:ring-nebula-500/40"
+                  className="h-3.5 w-3.5 rounded border-input text-nebula-600 focus:ring-nebula-500/40"
                 />
                 Remember me
               </label>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-md animate-in fade-in slide-in-from-top-1 duration-200">
+                <div className="bg-destructive/10 border border-destructive/30 text-destructive text-sm px-3 py-2 rounded-md animate-in fade-in slide-in-from-top-1 duration-200">
                   {error}
                 </div>
               )}
@@ -157,7 +157,7 @@ export default function Login() {
             </form>
           </div>
 
-          <p className="text-center text-xs text-slate-400 mt-6">
+          <p className="text-center text-xs text-muted-foreground mt-6">
             Contact your administrator if you need access
           </p>
         </div>
