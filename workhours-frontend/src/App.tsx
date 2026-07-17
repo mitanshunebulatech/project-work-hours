@@ -6,6 +6,7 @@ import { ThemeProvider } from '@/hooks/useTheme'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Layout from '@/components/Layout'
 import Login from '@/pages/Login'
+import ForcedPasswordChange from '@/pages/ForcedPasswordChange'
 
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Timesheets = lazy(() => import('@/pages/Timesheets'))
@@ -41,24 +42,40 @@ function PageFallback() {
   )
 }
 
-function ProtectedRoute({ children, adminOnly = false, employeeOnly = false }: { children: React.ReactNode; adminOnly?: boolean; employeeOnly?: boolean }) {
-  const { user, loading } = useAuth()
+function ProtectedRoute({ children, adminOnly = false }: { children: React.ReactNode; adminOnly?: boolean }) {
+  const { user, loading, mustChangePassword } = useAuth()
 
   if (loading) return <FullscreenSpinner />
+  // PM V2 Part 4: checked before the !user check below — a locked account
+  // has user=null (see useAuth.tsx), so without this it would bounce to
+  // /login instead of the forced-change screen.
+  if (mustChangePassword) return <Navigate to="/change-password" replace />
   if (!user) return <Navigate to="/login" replace />
   if (adminOnly && user.role !== 'admin') return <Navigate to="/dashboard" replace />
-  if (employeeOnly && user.role === 'admin') return <Navigate to="/dashboard" replace />
   return <>{children}</>
 }
 
 function AppRoutes() {
-  const { user, loading } = useAuth()
+  const { user, loading, mustChangePassword } = useAuth()
 
   if (loading) return <FullscreenSpinner />
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
+      <Route path="/login" element={
+        mustChangePassword ? <Navigate to="/change-password" replace />
+        : user ? <Navigate to="/dashboard" replace />
+        : <Login />
+      } />
+
+      {/* PM V2 Part 4: only reachable while locked — a normal user hitting
+          this URL directly gets bounced away rather than landing on a
+          change-password form with no context for why. Self-service
+          (voluntary) password change is a separate, future concern on the
+          Profile page, not this route. */}
+      <Route path="/change-password" element={
+        mustChangePassword ? <ForcedPasswordChange /> : <Navigate to={user ? '/dashboard' : '/login'} replace />
+      } />
 
       <Route path="/*" element={
         <ProtectedRoute>
@@ -66,7 +83,7 @@ function AppRoutes() {
             <Suspense fallback={<PageFallback />}>
               <Routes>
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/timesheets" element={<ProtectedRoute employeeOnly><Timesheets /></ProtectedRoute>} />
+                <Route path="/timesheets" element={<Timesheets />} />
                 <Route path="/leave" element={<Leave />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/admin/timesheets" element={<ProtectedRoute adminOnly><AdminTimesheets /></ProtectedRoute>} />
