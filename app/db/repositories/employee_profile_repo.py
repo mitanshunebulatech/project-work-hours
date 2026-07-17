@@ -2,7 +2,7 @@
 app/db/repositories/employee_profile_repo.py
 """
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 
 from app.db.repositories.base import BaseRepository
 from app.models.employee_profile import EmployeeProfile
@@ -13,11 +13,24 @@ class EmployeeProfileRepository(BaseRepository[EmployeeProfile]):
 
     def generate_next_employee_code(self) -> str:
         """
-        Next sequential "EMP-0001" style code. Reads the current max via
-        the numeric suffix rather than row count, so a deleted row never
-        causes a code to be reissued. Single shared source of truth for
-        both admin-create and (later) OnboardingService.
+        Pulls from the employee_code_seq Postgres sequence (migration 0026)
+        rather than SELECT MAX(...)+1 — nextval() is atomic under
+        concurrency; MAX+1 is not (two onboarding requests racing could
+        compute the same "next" code before either commits — a real bug
+        found in a repo audit, fixed here).
+
+        SQLite (used only by the test suite — production always runs
+        Postgres) has no CREATE SEQUENCE/nextval equivalent, so this falls
+        back to the old MAX+1 approach there. That fallback is exercised
+        only by the synchronous, single-connection test suite, where the
+        race condition this method exists to prevent cannot occur — the
+        atomicity guarantee that actually matters in production is
+        untouched.
         """
+        if self.db.bind is not None and self.db.bind.dialect.name == "postgresql":
+            value = self.db.execute(text("SELECT nextval('employee_code_seq')")).scalar_one()
+            return f"EMP-{value:04d}"
+
         stmt = select(func.max(EmployeeProfile.employee_code))
         current_max = self.db.execute(stmt).scalar_one_or_none()
         next_number = 1

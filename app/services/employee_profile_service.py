@@ -2,26 +2,32 @@
 app/services/employee_profile_service.py
 """
 
+from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError
 from app.db.repositories.audit_repo import AuditRepository
 from app.db.repositories.employee_profile_repo import EmployeeProfileRepository
+from app.db.repositories.identity_document_repo import IdentityDocumentRepository
 from app.models.employee_profile import EmployeeProfile
+from app.models.identity_document import IdentityDocument
 from app.schemas.common import PaginatedResponse
 from app.schemas.employee_profile import (
     EmployeeProfileAdminCreate,
     EmployeeProfileAdminUpdate,
     EmployeeProfileResponse,
     EmployeeProfileSelfUpdate,
+    IdentityDocumentBrief,
 )
+from app.utils.file_storage import save_profile_picture_file
 from app.utils.name_utils import split_full_name
+from app.utils.secure_file_storage import save_identity_document_file
 
 # Fields where the *value itself* must never be written into audit_logs
 # (before_data/after_data are stored as JSON and would otherwise persist a
 # second, unencrypted copy of a sensitive government ID). Every other field
 # audits its real before/after value, same as UserService/DepartmentService.
-_REDACTED_AUDIT_FIELDS = {"pan_number"}
+_REDACTED_AUDIT_FIELDS = {"pan_number", "document_number"}
 
 
 def _redact(field: str, value: object) -> object:
@@ -32,6 +38,7 @@ class EmployeeProfileService:
     def __init__(self, db: Session):
         self.db = db
         self.profile_repo = EmployeeProfileRepository(db)
+        self.identity_document_repo = IdentityDocumentRepository(db)
         self.audit_repo = AuditRepository(db)
 
     # ---- Self-service (own profile) ----
@@ -53,12 +60,21 @@ class EmployeeProfileService:
 
         before = {
             "phone_number": profile.phone_number,
+            "emergency_contact_phone": profile.emergency_contact_phone,
+            "present_address": profile.present_address,
+            "years_of_experience": str(profile.years_of_experience) if profile.years_of_experience else None,
             "date_of_birth": str(profile.date_of_birth) if profile.date_of_birth else None,
             "pan_number": _redact("pan_number", profile.pan_number),
         }
 
         if payload.phone_number is not None:
             profile.phone_number = payload.phone_number
+        if payload.emergency_contact_phone is not None:
+            profile.emergency_contact_phone = payload.emergency_contact_phone
+        if payload.present_address is not None:
+            profile.present_address = payload.present_address
+        if payload.years_of_experience is not None:
+            profile.years_of_experience = payload.years_of_experience
         if payload.date_of_birth is not None:
             profile.date_of_birth = payload.date_of_birth
         if payload.pan_number is not None:
@@ -74,6 +90,9 @@ class EmployeeProfileService:
             before_data=before,
             after_data={
                 "phone_number": updated.phone_number,
+                "emergency_contact_phone": updated.emergency_contact_phone,
+                "present_address": updated.present_address,
+                "years_of_experience": str(updated.years_of_experience) if updated.years_of_experience else None,
                 "date_of_birth": str(updated.date_of_birth) if updated.date_of_birth else None,
                 "pan_number": _redact("pan_number", updated.pan_number) if payload.pan_number else before["pan_number"],
             },
@@ -116,7 +135,10 @@ class EmployeeProfileService:
             date_of_birth=payload.date_of_birth,
             date_of_joining=payload.date_of_joining,
             phone_number=payload.phone_number,
+            emergency_contact_phone=payload.emergency_contact_phone,
+            present_address=payload.present_address,
             designation=payload.designation,
+            years_of_experience=payload.years_of_experience,
             pan_number=payload.pan_number,
         )
         created = self.profile_repo.create(profile)
@@ -162,8 +184,14 @@ class EmployeeProfileService:
             profile.date_of_joining = payload.date_of_joining
         if payload.phone_number is not None:
             profile.phone_number = payload.phone_number
+        if payload.emergency_contact_phone is not None:
+            profile.emergency_contact_phone = payload.emergency_contact_phone
+        if payload.present_address is not None:
+            profile.present_address = payload.present_address
         if payload.designation is not None:
             profile.designation = payload.designation
+        if payload.years_of_experience is not None:
+            profile.years_of_experience = payload.years_of_experience
         if payload.pan_number is not None:
             profile.pan_number = payload.pan_number
 
@@ -181,6 +209,96 @@ class EmployeeProfileService:
                 "designation": updated.designation,
                 "pan_number": _redact("pan_number", updated.pan_number) if payload.pan_number else before["pan_number"],
             },
+            ip_address=ip_address,
+        )
+        self.db.commit()
+        return EmployeeProfileResponse.from_model(updated)
+
+    # ---- Identity documents (PM item 6: extensible, Aadhaar/Passport-ready) ----
+
+    def upload_identity_document(
+        self,
+        profile_id: int,
+        *,
+        document_type: str,
+        document_number: str | None,
+        file: UploadFile,
+        actor_id: int,
+        ip_address: str | None,
+    ) -> IdentityDocumentBrief:
+        profile = self.profile_repo.get(profile_id)
+        if profile is None:
+            raise NotFoundError("Employee profile not found")
+
+        file_path = save_identity_document_file(file)
+        document = IdentityDocument(
+            employee_profile_id=profile_id,
+            document_type=document_type,
+            document_number=document_number,
+            file_path=file_path,
+        )
+        created = self.identity_document_repo.create(document)
+
+        self.audit_repo.log(
+            actor_id=actor_id,
+            table_name="identity_documents",
+            operation="INSERT",
+            record_id=created.id,
+            after_data={
+                "employee_profile_id": profile_id,
+                "document_type": document_type,
+                "document_number": _redact("document_number", document_number),
+            },
+            ip_address=ip_address,
+        )
+        self.db.commit()
+        return IdentityDocumentBrief.from_model(created)
+
+    def list_identity_documents(self, profile_id: int) -> list[IdentityDocumentBrief]:
+        if self.profile_repo.get(profile_id) is None:
+            raise NotFoundError("Employee profile not found")
+        docs = self.identity_document_repo.list_for_profile(profile_id)
+        return [IdentityDocumentBrief.from_model(d) for d in docs]
+
+    def delete_identity_document(
+        self, profile_id: int, document_id: int, *, actor_id: int, ip_address: str | None
+    ) -> None:
+        document = self.identity_document_repo.get(document_id)
+        if document is None or document.employee_profile_id != profile_id:
+            raise NotFoundError("Identity document not found")
+
+        self.audit_repo.log(
+            actor_id=actor_id,
+            table_name="identity_documents",
+            operation="DELETE",
+            record_id=document.id,
+            before_data={"document_type": document.document_type},
+            ip_address=ip_address,
+        )
+        self.identity_document_repo.delete(document)
+        self.db.commit()
+
+    # ---- Profile picture (PM item 10: employee-uploadable, per decision) ----
+
+    def set_profile_picture(
+        self, profile_id: int, *, file: UploadFile, actor_id: int, ip_address: str | None
+    ) -> EmployeeProfileResponse:
+        profile = self.profile_repo.get(profile_id)
+        if profile is None:
+            raise NotFoundError("Employee profile not found")
+
+        file_path = save_profile_picture_file(file)
+        before_path = profile.profile_picture_path
+        profile.profile_picture_path = file_path
+        updated = self.profile_repo.update(profile)
+
+        self.audit_repo.log(
+            actor_id=actor_id,
+            table_name="employee_profiles",
+            operation="UPDATE",
+            record_id=updated.id,
+            before_data={"profile_picture_path": before_path},
+            after_data={"profile_picture_path": file_path},
             ip_address=ip_address,
         )
         self.db.commit()
