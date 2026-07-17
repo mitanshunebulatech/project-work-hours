@@ -12,10 +12,11 @@ org-managed fields (department, designation, full_name) stay admin-only,
 via app/api/v1/endpoints/employees.py.
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_client_ip, get_current_user
+from app.core.exceptions import NotFoundError
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.employee_profile import EmployeeProfileSelfUpdate, MyProfileResponse
@@ -46,3 +47,26 @@ def update_my_profile(
     # Re-fetch so the response reflects the freshly-committed row.
     profile = EmployeeProfileService(db).get_own_profile(current_user.id)
     return MyProfileResponse.build(current_user, profile)
+
+
+@router.post("/me/picture", response_model=MyProfileResponse)
+def update_my_profile_picture(
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> MyProfileResponse:
+    """PM item 10: Profile Picture is employee-uploadable (per decision).
+    Requires a profile row to already exist — same "no profile yet" guard
+    as update_my_profile above."""
+    service = EmployeeProfileService(db)
+    profile = service.get_own_profile(current_user.id)
+    if profile is None:
+        raise NotFoundError(
+            "No employee profile exists yet for this account — ask an admin to create one first"
+        )
+    service.set_profile_picture(
+        profile.id, file=file, actor_id=current_user.id, ip_address=get_client_ip(request)
+    )
+    updated_profile = service.get_own_profile(current_user.id)
+    return MyProfileResponse.build(current_user, updated_profile)

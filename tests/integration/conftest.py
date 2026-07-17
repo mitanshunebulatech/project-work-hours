@@ -69,6 +69,15 @@ def _build_test_metadata() -> MetaData:
     Base.metadata.tables["departments"].to_metadata(test_metadata)
     Base.metadata.tables["employee_profiles"].to_metadata(test_metadata)
 
+    # Onboarding module: identity_documents (one-to-many with
+    # employee_profiles). document_number uses the same EncryptedString
+    # TypeDecorator as pan_number above — same "no stand-in needed" reasoning.
+    # Required because EmployeeProfileResponse.from_model now always reads
+    # profile.identity_documents, so any EmployeeProfileService test that
+    # returns a response touches this table even if it never uploads a
+    # document.
+    Base.metadata.tables["identity_documents"].to_metadata(test_metadata)
+
     # Chunk 2: leave_types and leave_requests, needed for DashboardService
     # integration tests (on-leave-today, recent-activities, calendar
     # widget). Both use only portable column types, same reasoning as the

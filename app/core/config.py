@@ -83,6 +83,11 @@ class Settings(BaseSettings):
     SMTP_FROM_ADDRESS: str = "noreply@workhours.local"
     SMTP_FROM_NAME: str = "WorkHours Enterprise"
 
+    # Shown in the onboarding welcome email as the login link — separate
+    # from any backend URL since this is what the *person's browser* needs
+    # to hit, not the API.
+    FRONTEND_BASE_URL: str = "http://localhost:5173"
+
 
 @lru_cache
 def get_settings() -> Settings:
