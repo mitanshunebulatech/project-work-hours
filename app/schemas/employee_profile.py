@@ -102,6 +102,12 @@ class EmployeeProfileAdminUpdate(BaseModel):
         return _validate_pan_format(value)
 
 
+# Free string, not a DB enum (see IdentityDocument model) — validated here
+# at the API boundary instead. Shared by both the admin view-only endpoint
+# and the employee self-service upload endpoint.
+ALLOWED_DOCUMENT_TYPES = frozenset({"PAN", "AADHAAR", "PASSPORT", "OTHER"})
+
+
 class IdentityDocumentBrief(BaseModel):
     model_config = ConfigDict(from_attributes=False)
 

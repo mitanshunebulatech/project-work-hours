@@ -12,17 +12,32 @@ org-managed fields (department, designation, full_name) stay admin-only,
 via app/api/v1/endpoints/employees.py.
 """
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_client_ip, get_current_user
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationError
 from app.db.session import get_db
 from app.models.user import User
-from app.schemas.employee_profile import EmployeeProfileSelfUpdate, MyProfileResponse
+from app.schemas.employee_profile import (
+    ALLOWED_DOCUMENT_TYPES,
+    EmployeeProfileSelfUpdate,
+    IdentityDocumentBrief,
+    MyProfileResponse,
+)
 from app.services.employee_profile_service import EmployeeProfileService
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
+
+
+def _own_profile_id_or_404(service: EmployeeProfileService, user_id: int) -> int:
+    profile = service.get_own_profile(user_id)
+    if profile is None:
+        raise NotFoundError(
+            "No employee profile exists yet for this account — ask an admin to create one first"
+        )
+    return profile.id
 
 
 @router.get("/me", response_model=MyProfileResponse)
@@ -70,3 +85,66 @@ def update_my_profile_picture(
     )
     updated_profile = service.get_own_profile(current_user.id)
     return MyProfileResponse.build(current_user, updated_profile)
+
+
+@router.post("/me/identity-documents", response_model=IdentityDocumentBrief, status_code=201)
+def upload_my_identity_document(
+    request: Request,
+    # Form(...), not plain str — these ride alongside file: UploadFile in the
+    # same multipart request, so FastAPI requires every field to be declared
+    # as Form()/File() or it silently treats document_type/document_number as
+    # query params instead of body fields (a real bug caught in the earlier
+    # admin-only version of this endpoint; fixed here from the start).
+    document_type: str = Form(...),
+    document_number: str | None = Form(default=None),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> IdentityDocumentBrief:
+    """
+    PM item 6/7 (per decision): identity documents are employee
+    self-service only — the employee uploads their own Aadhaar/PAN/
+    Passport/Other scan after onboarding, an admin never uploads on
+    their behalf (see app/api/v1/endpoints/employees.py's
+    list_identity_documents for the admin's view-only counterpart).
+    """
+    if document_type not in ALLOWED_DOCUMENT_TYPES:
+        raise ValidationError(
+            f"Invalid document_type '{document_type}'. Must be one of: "
+            f"{', '.join(sorted(ALLOWED_DOCUMENT_TYPES))}"
+        )
+    service = EmployeeProfileService(db)
+    profile_id = _own_profile_id_or_404(service, current_user.id)
+    return service.upload_identity_document(
+        profile_id,
+        document_type=document_type,
+        document_number=document_number,
+        file=file,
+        actor_id=current_user.id,
+        ip_address=get_client_ip(request),
+    )
+
+
+@router.get("/me/identity-documents", response_model=list[IdentityDocumentBrief])
+def list_my_identity_documents(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> list[IdentityDocumentBrief]:
+    service = EmployeeProfileService(db)
+    profile_id = _own_profile_id_or_404(service, current_user.id)
+    return service.list_identity_documents(profile_id)
+
+
+@router.delete("/me/identity-documents/{document_id}", status_code=204)
+def delete_my_identity_document(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    service = EmployeeProfileService(db)
+    profile_id = _own_profile_id_or_404(service, current_user.id)
+    service.delete_identity_document(
+        profile_id, document_id, actor_id=current_user.id, ip_address=get_client_ip(request)
+    )
+    return Response(status_code=204)

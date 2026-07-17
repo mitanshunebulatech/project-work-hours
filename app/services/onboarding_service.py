@@ -156,4 +156,5 @@ class OnboardingService:
             email=created_user.email,
             employee_code=employee_code,
             email_sent=email_sent,
+            temp_password=temp_password,
         )
