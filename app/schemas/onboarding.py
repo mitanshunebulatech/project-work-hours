@@ -47,3 +47,8 @@ class EmployeeOnboardingResponse(BaseModel):
     email: str
     employee_code: str
     email_sent: bool
+    # Shown once, here, right after creation — never returned by any other
+    # endpoint afterward. If email_sent is False (no SMTP configured yet),
+    # this is the ONLY way the admin ever sees it, so the frontend must
+    # display it in a one-time modal and make clear it won't be shown again.
+    temp_password: str

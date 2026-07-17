@@ -67,6 +67,14 @@ def test_onboard_employee_creates_user_and_profile_atomically(
     assert profile.first_name == "Priya"
     assert profile.employee_code.startswith("EMP-")
 
+    # Shown once in the response — the only place an admin can ever see it
+    # if SMTP isn't configured (email_sent is False in tests, since
+    # SMTP_HOST defaults to "" — see EmailService.enabled).
+    assert result.temp_password
+    from app.core.security import verify_password
+
+    assert verify_password(result.temp_password, created_user.password_hash)
+
 
 def test_onboard_employee_derives_legacy_admin_role_from_system_admin_role(
     db_session: Session, admin_role: Role
