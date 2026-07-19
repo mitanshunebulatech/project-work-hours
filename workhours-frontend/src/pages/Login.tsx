@@ -1,7 +1,8 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { Clock, Eye, EyeOff, ShieldCheck, BarChart3, Zap } from 'lucide-react'
+import { Eye, EyeOff, ShieldCheck, BarChart3, Zap } from 'lucide-react'
+import NebulaTechIcon from '@/components/NebulaTechIcon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/misc'
@@ -40,7 +41,7 @@ export default function Login() {
 
         <div className="relative flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-white/10 border border-white/20 flex items-center justify-center backdrop-blur">
-            <Clock size={16} className="text-white" />
+            <NebulaTechIcon size={20} />
           </div>
           <span className="text-white font-display font-semibold text-base tracking-tight">WorkHours</span>
         </div>
@@ -77,8 +78,8 @@ export default function Login() {
         <div className="w-full max-w-sm animate-in fade-in slide-in-from-bottom-2 duration-500">
           {/* Mobile brand mark */}
           <div className="lg:hidden flex items-center gap-2.5 mb-10">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-nebula-500 to-nebula-700 flex items-center justify-center">
-              <Clock size={16} className="text-white" />
+            <div className="w-8 h-8 flex items-center justify-center shrink-0">
+              <NebulaTechIcon size={26} />
             </div>
             <span className="font-display font-semibold text-base text-foreground">WorkHours</span>
           </div>
