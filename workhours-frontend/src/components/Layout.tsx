@@ -87,8 +87,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       >
         {/* Logo */}
         <div className={cn('flex items-center h-14 border-b border-sidebar-border', collapsed ? 'justify-center px-0' : 'gap-2.5 px-5')}>
-          <div className="w-7 h-7 flex items-center justify-center shrink-0">
-            <NebulaTechIcon size={22} />
+          <div className="w-7 h-7 rounded-md bg-white flex items-center justify-center shrink-0 shadow-sm">
+            <NebulaTechIcon size={20} />
           </div>
           {!collapsed && (
             <span className="text-white font-display font-semibold text-sm tracking-tight">
