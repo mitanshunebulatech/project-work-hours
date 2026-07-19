@@ -8,9 +8,11 @@ kept separate the same way users.py (admin-only) and profile.py
 """
 
 from fastapi import APIRouter, Depends, Request
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_client_ip, require_permission
+from app.core.exceptions import NotFoundError
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.common import PaginatedResponse
@@ -23,6 +25,7 @@ from app.schemas.employee_profile import (
 from app.schemas.onboarding import EmployeeOnboardingRequest, EmployeeOnboardingResponse
 from app.services.employee_profile_service import EmployeeProfileService
 from app.services.onboarding_service import OnboardingService
+from app.utils.file_storage import resolve_profile_picture_path
 from app.utils.pagination import PageParams
 
 router = APIRouter(prefix="/employees", tags=["Employees"])
@@ -132,3 +135,28 @@ def list_identity_documents(
     point of these being the employee's own identity verification.
     """
     return EmployeeProfileService(db).list_identity_documents(profile_id)
+
+
+@router.get(
+    "/{profile_id}/picture",
+    dependencies=[Depends(require_permission("employees:manage"))],
+)
+def get_employee_picture(
+    profile_id: int,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    """
+    Admin, view-only counterpart to GET /profile/me/picture — HR oversight
+    (e.g. confirming a picture was actually uploaded), not an upload
+    endpoint. Uploading on an employee's behalf isn't offered here, same
+    reasoning as list_identity_documents above: profile picture is
+    employee self-service (see profile.py's POST /me/picture).
+    """
+    service = EmployeeProfileService(db)
+    profile = service.profile_repo.get(profile_id)
+    if profile is None or not profile.profile_picture_path:
+        raise NotFoundError("No profile picture set for this employee")
+    file_path = resolve_profile_picture_path(profile.profile_picture_path)
+    if not file_path.exists():
+        raise NotFoundError("Profile picture file not found")
+    return FileResponse(file_path)

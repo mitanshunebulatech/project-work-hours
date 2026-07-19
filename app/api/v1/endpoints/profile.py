@@ -13,7 +13,7 @@ via app/api/v1/endpoints/employees.py.
 """
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_client_ip, get_current_user
@@ -27,6 +27,7 @@ from app.schemas.employee_profile import (
     MyProfileResponse,
 )
 from app.services.employee_profile_service import EmployeeProfileService
+from app.utils.file_storage import resolve_profile_picture_path
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
 
@@ -85,6 +86,29 @@ def update_my_profile_picture(
     )
     updated_profile = service.get_own_profile(current_user.id)
     return MyProfileResponse.build(current_user, updated_profile)
+
+
+@router.get("/me/picture")
+def get_my_profile_picture(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> FileResponse:
+    """
+    Serves the raw image file. The upload endpoint above stores
+    profile_picture_path on the row, but nothing served it back — an
+    <img src=...> would have had nowhere valid to point without this.
+    Self-only, same scoping as the upload endpoint; see
+    app/api/v1/endpoints/employees.py's get_employee_picture for the
+    admin view-only counterpart (mirrors the identity-documents split).
+    """
+    service = EmployeeProfileService(db)
+    profile = service.get_own_profile(current_user.id)
+    if profile is None or not profile.profile_picture_path:
+        raise NotFoundError("No profile picture set")
+    file_path = resolve_profile_picture_path(profile.profile_picture_path)
+    if not file_path.exists():
+        raise NotFoundError("Profile picture file not found")
+    return FileResponse(file_path)
 
 
 @router.post("/me/identity-documents", response_model=IdentityDocumentBrief, status_code=201)

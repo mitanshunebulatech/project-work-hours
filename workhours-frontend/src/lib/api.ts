@@ -70,9 +70,45 @@ export const changePassword = (current_password: string, new_password: string) =
 export const getProfile = () => api.get('/profile/me')
 export const updateProfile = (data: {
   phone_number?: string | null
+  emergency_contact_phone?: string | null
+  present_address?: string | null
+  years_of_experience?: number | null
   date_of_birth?: string | null
   pan_number?: string | null
 }) => api.patch('/profile/me', data)
+
+export const uploadMyProfilePicture = (file: File) => {
+  const formData = new FormData()
+  formData.append('file', file)
+  return api.post('/profile/me/picture', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+// Blob fetch, not a plain URL — GET /profile/me/picture is auth-protected,
+// and <img src> doesn't carry the Authorization header the way axios calls
+// do (same reasoning as downloadLeaveAttachment below). Caller is
+// responsible for URL.createObjectURL(...) and revoking it on cleanup.
+export const getMyProfilePicture = () =>
+  api.get('/profile/me/picture', { responseType: 'blob' })
+
+// --- Identity Documents (self-service — employee uploads their own, PM item 6/7) ---
+export const getMyIdentityDocuments = () => api.get('/profile/me/identity-documents')
+export const uploadMyIdentityDocument = (
+  documentType: string, documentNumber: string | null, file: File
+) => {
+  const formData = new FormData()
+  formData.append('document_type', documentType)
+  if (documentNumber) formData.append('document_number', documentNumber)
+  formData.append('file', file)
+  return api.post('/profile/me/identity-documents', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+export const deleteMyIdentityDocument = (documentId: number) =>
+  api.delete(`/profile/me/identity-documents/${documentId}`)
+// Admin, view-only — HR oversight, not upload-on-behalf-of (see employees.py docstring)
+export const getEmployeeIdentityDocuments = (profileId: number) =>
+  api.get(`/employees/${profileId}/identity-documents`)
 
 // Dashboard (admin operations view — PM req #1)
 export const getDashboardSummary = () => api.get('/dashboard/summary')
@@ -207,6 +243,9 @@ export const deactivateDepartment = (id: number) => api.delete(`/departments/${i
 // --- Employees (admin-facing employee profile management) ---
 export const getEmployees = (params?: object) => api.get('/employees', { params })
 export const getEmployee = (profileId: number) => api.get(`/employees/${profileId}`)
+// Legacy path — attaches a profile to an EXISTING user account (predates
+// onboardEmployee). Prefer onboardEmployee for new hires; this stays for
+// backfilling accounts created before the onboarding module existed.
 export const createEmployeeProfile = (data: {
   user_id: number
   full_name: string
@@ -214,7 +253,10 @@ export const createEmployeeProfile = (data: {
   date_of_birth?: string | null
   date_of_joining?: string | null
   phone_number?: string | null
+  emergency_contact_phone?: string | null
+  present_address?: string | null
   designation?: string | null
+  years_of_experience?: number | null
   pan_number?: string | null
 }) => api.post('/employees', data)
 export const updateEmployeeProfile = (
@@ -225,10 +267,35 @@ export const updateEmployeeProfile = (
     date_of_birth?: string | null
     date_of_joining?: string | null
     phone_number?: string | null
+    emergency_contact_phone?: string | null
+    present_address?: string | null
     designation?: string | null
+    years_of_experience?: number | null
     pan_number?: string | null
   }
 ) => api.patch(`/employees/${profileId}`, data)
+export const getEmployeePicture = (profileId: number) =>
+  api.get(`/employees/${profileId}/picture`, { responseType: 'blob' })
+
+// PM item 7: the single combined onboarding workflow — creates User +
+// EmployeeProfile + assigns role/department + sends welcome email in one
+// call. Distinct from createEmployeeProfile above, which assumes a User
+// already exists (kept as the "attach to existing user" secondary flow).
+export const onboardEmployee = (data: {
+  first_name: string
+  last_name?: string | null
+  email: string
+  personal_phone_number?: string | null
+  emergency_phone_number?: string | null
+  present_address?: string | null
+  joining_date?: string | null
+  birth_date?: string | null
+  department_id?: number | null
+  designation?: string | null
+  years_of_experience?: number | null
+  pan_number?: string | null
+  role_id: number
+}) => api.post('/employees/onboard', data)
 
 // --- Roles & Permissions ---
 export const getRoles = () => api.get('/roles')
