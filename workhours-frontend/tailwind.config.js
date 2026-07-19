@@ -53,10 +53,14 @@ export default {
           accent: 'hsl(var(--sidebar-accent))',
           'accent-foreground': 'hsl(var(--sidebar-accent-foreground))'
         },
+        // Orange accent ramp, hue/saturation-locked to the exact NebulaTech
+        // brand primary (#F65304 = 500 below) — used on dark surfaces (e.g.
+        // the navy sidebar's logo badge and active-nav indicator) where a
+        // flat --primary token isn't enough range for gradients/hover states.
         nebula: {
-          50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd',
-          400: '#60a5fa', 500: '#3B82F6', 600: '#2563EB', 700: '#1E40AF',
-          800: '#1e3a8a', 900: '#0F172A',
+          50: '#fff1eb', 100: '#fee0d2', 200: '#fec2a5', 300: '#fd9c6d',
+          400: '#fc7736', 500: '#f65304', 600: '#ec5004', 700: '#c94403',
+          800: '#a13603', 900: '#6e2502',
         },
       },
       borderRadius: {
@@ -69,7 +73,7 @@ export default {
         soft: '0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06)',
         card: '0 1px 3px 0 rgb(15 23 42 / 0.06), 0 1px 2px -1px rgb(15 23 42 / 0.06)',
         elevated: '0 4px 12px -2px rgb(15 23 42 / 0.08), 0 2px 6px -2px rgb(15 23 42 / 0.05)',
-        glow: '0 0 0 1px rgb(37 99 235 / 0.08), 0 8px 24px -8px rgb(37 99 235 / 0.35)',
+        glow: '0 0 0 1px rgb(246 83 4 / 0.08), 0 8px 24px -8px rgb(246 83 4 / 0.35)',
       },
       keyframes: {
         'accordion-down': { from: { height: '0' }, to: { height: 'var(--radix-accordion-content-height)' } },
@@ -86,8 +90,8 @@ export default {
           '100%': { transform: 'translateX(100%)' },
         },
         'pulse-ring': {
-          '0%': { boxShadow: '0 0 0 0 rgb(37 99 235 / 0.35)' },
-          '100%': { boxShadow: '0 0 0 8px rgb(37 99 235 / 0)' },
+          '0%': { boxShadow: '0 0 0 0 rgb(246 83 4 / 0.35)' },
+          '100%': { boxShadow: '0 0 0 8px rgb(246 83 4 / 0)' },
         },
       },
       animation: {
