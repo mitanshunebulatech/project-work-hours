@@ -18,7 +18,7 @@ export const AvatarImage = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Image>,
   React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
 >(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Image ref={ref} className={cn('aspect-square h-full w-full', className)} {...props} />
+  <AvatarPrimitive.Image ref={ref} className={cn('aspect-square h-full w-full object-cover', className)} {...props} />
 ))
 AvatarImage.displayName = 'AvatarImage'
 
@@ -37,11 +37,20 @@ export const AvatarFallback = React.forwardRef<
 ))
 AvatarFallback.displayName = 'AvatarFallback'
 
-/** Convenience wrapper: renders initials on a brand-gradient circle. */
-export function UserAvatar({ name, className, size = 32 }: { name?: string; className?: string; size?: number }) {
+/**
+ * Convenience wrapper: renders an image when src is given (must be an
+ * already-resolved object URL, e.g. from a blob fetch — protected
+ * endpoints don't work as plain <img src> since that bypasses axios's
+ * auth interceptor, see Profile.tsx for the fetch-as-blob pattern),
+ * falling back to initials-on-brand-gradient otherwise.
+ */
+export function UserAvatar({
+  name, src, className, size = 32,
+}: { name?: string; src?: string | null; className?: string; size?: number }) {
   const initial = name?.trim()?.[0]?.toUpperCase() || '?'
   return (
     <Avatar className={className} style={{ width: size, height: size }}>
+      {src && <AvatarImage src={src} alt={name || 'Profile picture'} />}
       <AvatarFallback style={{ fontSize: size * 0.4 }}>{initial}</AvatarFallback>
     </Avatar>
   )
