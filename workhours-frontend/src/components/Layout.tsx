@@ -16,6 +16,7 @@ import {
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import NotificationBell from '@/components/NotificationBell'
+import NebulaTechIcon from '@/components/NebulaTechIcon'
 
 interface NavItem { label: string; to: string; icon: ReactNode; adminOnly?: boolean; employeeOnly?: boolean }
 
@@ -86,8 +87,8 @@ export default function Layout({ children }: { children: ReactNode }) {
       >
         {/* Logo */}
         <div className={cn('flex items-center h-14 border-b border-sidebar-border', collapsed ? 'justify-center px-0' : 'gap-2.5 px-5')}>
-          <div className="w-7 h-7 rounded-md bg-gradient-to-br from-nebula-500 to-nebula-700 flex items-center justify-center shrink-0 shadow-glow">
-            <Clock size={14} className="text-white" />
+          <div className="w-7 h-7 flex items-center justify-center shrink-0">
+            <NebulaTechIcon size={22} />
           </div>
           {!collapsed && (
             <span className="text-white font-display font-semibold text-sm tracking-tight">
