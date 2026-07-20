@@ -131,6 +131,23 @@ class BulkApproveResponse(BaseModel):
     failed_count: int
 
 
+class BulkRejectRequest(BaseModel):
+    request_ids: list[int] = Field(min_length=1, max_length=200)
+    admin_comment: str = Field(min_length=3, max_length=2000)
+
+
+class BulkRejectResultItem(BaseModel):
+    request_id: int
+    success: bool
+    detail: str | None = None
+
+
+class BulkRejectResponse(BaseModel):
+    results: list[BulkRejectResultItem]
+    rejected_count: int
+    failed_count: int
+
+
 class LeaveCalendarEntryResponse(BaseModel):
     employee_username: str
     leave_type_code: str
