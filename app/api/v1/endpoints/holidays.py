@@ -28,6 +28,20 @@ def list_holidays(
     )
 
 
+@router.get(
+    "/published/{year}",
+    response_model=list[HolidayResponse],
+    dependencies=[Depends(require_any_role)],
+)
+def list_published_holidays(year: int, db: Session = Depends(get_db)) -> list[HolidayResponse]:
+    """Employee-facing calendar (PM req #4) — routes through
+    HolidayService.list_published_for_year(), which itself routes through
+    the repository's dedicated get_published_for_year(), never search().
+    An unpublished year's holidays are simply absent from this response,
+    not filtered client-side, so there's nothing to leak here."""
+    return HolidayService(db).list_published_for_year(year)
+
+
 @router.post("", response_model=HolidayResponse, status_code=201)
 def create_holiday(
     payload: HolidayCreate,
@@ -64,3 +78,33 @@ def deactivate_holiday(
         holiday_id, actor_id=current_user.id, ip_address=get_client_ip(request)
     )
     return MessageResponse(message="Holiday deactivated")
+
+
+@router.post("/publish/{year}", response_model=MessageResponse)
+def publish_year(
+    year: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("holidays:manage")),
+) -> MessageResponse:
+    """PM req #3: makes the whole year's active holidays visible to
+    employees in one action. Gated on holidays:manage — same permission
+    as create/update/deactivate, per PM decision that all holiday admin
+    actions are admin-only."""
+    changed = HolidayService(db).publish_year(
+        year, actor_id=current_user.id, ip_address=get_client_ip(request)
+    )
+    return MessageResponse(message=f"Published {changed} holiday(s) for {year}")
+
+
+@router.post("/unpublish/{year}", response_model=MessageResponse)
+def unpublish_year(
+    year: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("holidays:manage")),
+) -> MessageResponse:
+    changed = HolidayService(db).unpublish_year(
+        year, actor_id=current_user.id, ip_address=get_client_ip(request)
+    )
+    return MessageResponse(message=f"Unpublished {changed} holiday(s) for {year}")

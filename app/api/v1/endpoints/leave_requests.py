@@ -17,6 +17,9 @@ from app.schemas.leave_request import (
     BulkApproveRequest,
     BulkApproveResponse,
     BulkApproveResultItem,
+    BulkRejectRequest,
+    BulkRejectResponse,
+    BulkRejectResultItem,
     LeaveCalendarEntryResponse,
     LeavePreviewRequest,
     LeavePreviewResponse,
@@ -273,6 +276,46 @@ def bulk_approve(
 
     return BulkApproveResponse(
         results=results, approved_count=approved_count, failed_count=failed_count
+    )
+
+
+@router.post("/bulk-reject", response_model=BulkRejectResponse)
+def bulk_reject(
+    payload: BulkRejectRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("leave_requests:approve")),
+) -> BulkRejectResponse:
+    """
+    Mirrors bulk_approve's best-effort-loop shape: one request's failure
+    (already actioned, self-rejection, etc.) doesn't block the rest of the
+    batch. reject_request() already enforces the pending-only and
+    no-self-review rules per row, so this endpoint adds no new business
+    logic — just the batching and per-row result reporting (PM req #9).
+    """
+    service = LeaveService(db)
+    results: list[BulkRejectResultItem] = []
+    rejected_count = 0
+    failed_count = 0
+
+    for request_id in payload.request_ids:
+        try:
+            service.reject_request(
+                request_id=request_id,
+                admin_user_id=current_user.id,
+                admin_comment=payload.admin_comment,
+                ip_address=get_client_ip(request),
+            )
+            results.append(BulkRejectResultItem(request_id=request_id, success=True))
+            rejected_count += 1
+        except Exception as exc:  # noqa: BLE001 — one row's failure must not abort the batch
+            results.append(
+                BulkRejectResultItem(request_id=request_id, success=False, detail=str(exc))
+            )
+            failed_count += 1
+
+    return BulkRejectResponse(
+        results=results, rejected_count=rejected_count, failed_count=failed_count
     )
 
 
