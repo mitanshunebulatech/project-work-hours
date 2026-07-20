@@ -32,6 +32,7 @@ class LeaveType(Base):
     )
 
     policies = relationship("LeavePolicy", back_populates="leave_type")
+    leave_plans = relationship("LeavePlan", back_populates="leave_type")
 
     def __repr__(self) -> str:
         return f"<LeaveType id={self.id} code={self.code!r}>"

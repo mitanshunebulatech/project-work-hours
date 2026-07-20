@@ -42,6 +42,10 @@ class User(Base):
     entries = relationship("WorkEntry", back_populates="employee", foreign_keys="WorkEntry.employee_id")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     role_ref = relationship("Role", back_populates="users", foreign_keys=[role_id])
+    # Default (lazy) loading, no cascade — see app/models/leave_plan.py for
+    # the full reasoning (this is loaded on every authenticated request via
+    # get_current_user(), so eager-loading here would be a real perf cost).
+    leave_plans = relationship("LeavePlan", back_populates="employee", foreign_keys="LeavePlan.employee_id")
     employee_profile = relationship(
         "EmployeeProfile", back_populates="user", uselist=False, foreign_keys="EmployeeProfile.user_id"
     )
