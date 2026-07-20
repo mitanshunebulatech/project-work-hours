@@ -11,6 +11,7 @@ from app.models.holiday import Holiday
 from app.models.identity_document import IdentityDocument
 from app.models.leave_balance import LeaveBalance
 from app.models.leave_ledger import LeaveLedgerEntry
+from app.models.leave_plan import LeavePlan
 from app.models.leave_policy import LeavePolicy
 from app.models.leave_request import LeaveRequest
 from app.models.leave_type import LeaveType
@@ -35,6 +36,7 @@ __all__ = [
     "LeaveBalance",
     "LeaveLedgerEntry",
     "LeaveRequest",
+    "LeavePlan",
     "Notification",
     "Department",
     "Permission",
