@@ -202,6 +202,9 @@ export const rejectLeaveRequest = (id: number, adminComment: string) =>
 export const bulkApproveLeaveRequests = (requestIds: number[], adminComment?: string) =>
   api.post('/leave-requests/bulk-approve', { request_ids: requestIds, admin_comment: adminComment })
 
+export const bulkRejectLeaveRequests = (requestIds: number[], adminComment: string) =>
+  api.post('/leave-requests/bulk-reject', { request_ids: requestIds, admin_comment: adminComment })
+
 export const getLeaveCalendar = (month: number, year: number) =>
   api.get('/leave-requests/calendar', { params: { month, year } })
 
@@ -229,6 +232,35 @@ export const getHolidays = (params?: object) => api.get('/holidays', { params })
 export const createHoliday = (data: object) => api.post('/holidays', data)
 export const updateHoliday = (id: number, data: object) => api.patch(`/holidays/${id}`, data)
 export const deactivateHoliday = (id: number) => api.post(`/holidays/${id}/deactivate`)
+// Employee-facing read path (PM req #4) — only ever returns a year's
+// holidays once an admin has published it via publishHolidayYear below;
+// an unpublished year comes back as an empty list, not an error.
+export const getPublishedHolidays = (year: number) => api.get(`/holidays/published/${year}`)
+// Admin-only bulk actions (PM req #3) — flips is_published on every
+// active holiday in the year in one call, rather than one request per row.
+export const publishHolidayYear = (year: number) => api.post(`/holidays/publish/${year}`)
+export const unpublishHolidayYear = (year: number) => api.post(`/holidays/unpublish/${year}`)
+
+// --- Leave Plans (PM req #6 — informational yearly planning, separate
+// from Leave Requests/approval workflow; see LeavePlanService docstring) ---
+export const getLeavePlans = (params?: object) => api.get('/leave-plans', { params })
+export const getLeavePlan = (id: number) => api.get(`/leave-plans/${id}`)
+export const createLeavePlan = (data: {
+  leave_type_id: number
+  planned_start_date: string
+  planned_end_date: string
+  reason?: string | null
+}) => api.post('/leave-plans', data)
+export const updateLeavePlan = (
+  id: number,
+  data: {
+    leave_type_id?: number
+    planned_start_date?: string
+    planned_end_date?: string
+    reason?: string | null
+  }
+) => api.patch(`/leave-plans/${id}`, data)
+export const deleteLeavePlan = (id: number) => api.delete(`/leave-plans/${id}`)
 
 // --- Departments ---
 export const getDepartments = (params?: object) => api.get('/departments', { params })
