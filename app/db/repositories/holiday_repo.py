@@ -38,19 +38,42 @@ class HolidayRepository(BaseRepository[Holiday]):
         *,
         year: int | None = None,
         is_active: bool | None = None,
+        is_published: bool | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[Holiday], int]:
         stmt = select(Holiday)
         count_stmt = select(func.count()).select_from(Holiday)
+        # Uses the indexed `year` column (migration 0027), not
+        # func.extract("year", Holiday.date) — the extract() form can't use
+        # idx_holidays_year and forces a full scan on every filtered query.
         if year is not None:
-            condition = func.extract("year", Holiday.date) == year
-            stmt = stmt.where(condition)
-            count_stmt = count_stmt.where(condition)
+            stmt = stmt.where(Holiday.year == year)
+            count_stmt = count_stmt.where(Holiday.year == year)
         if is_active is not None:
             stmt = stmt.where(Holiday.is_active == is_active)
             count_stmt = count_stmt.where(Holiday.is_active == is_active)
+        if is_published is not None:
+            stmt = stmt.where(Holiday.is_published == is_published)
+            count_stmt = count_stmt.where(Holiday.is_published == is_published)
         total = self.db.execute(count_stmt).scalar_one()
         stmt = stmt.order_by(Holiday.date.asc()).limit(limit).offset(offset)
         items = list(self.db.execute(stmt).scalars().all())
         return items, total
+
+    def get_published_for_year(self, year: int) -> list[Holiday]:
+        """
+        The employee-facing read path (PM req #4: 'Employees should only
+        see published calendars'). Deliberately separate from search() —
+        this one has no is_active/pagination knobs because the employee
+        view is always 'all published holidays for one year', never a
+        paginated admin table. Keeping it a distinct, narrow method makes
+        that access-control boundary impossible to accidentally bypass by
+        a caller forgetting to pass is_published=True.
+        """
+        stmt = (
+            select(Holiday)
+            .where(Holiday.year == year, Holiday.is_published.is_(True))
+            .order_by(Holiday.date.asc())
+        )
+        return list(self.db.execute(stmt).scalars().all())
