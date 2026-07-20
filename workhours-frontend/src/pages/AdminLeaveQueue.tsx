@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useToast } from '@/hooks/useToast'
 import {
   getLeaveTypes, getPendingLeaveRequests, approveLeaveRequest, rejectLeaveRequest,
-  bulkApproveLeaveRequests, getEmployeeLeaveHistory, getEmployeeLeaveBalances,
+  bulkApproveLeaveRequests, bulkRejectLeaveRequests, getEmployeeLeaveHistory, getEmployeeLeaveBalances,
   exportLeaveRequestsCsv, downloadLeaveAttachment
 } from '@/lib/api'
 import { Card, CardContent, CardHeader, CardTitle, Badge, Label, Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/misc'
@@ -146,6 +146,29 @@ export default function AdminLeaveQueue() {
     }
   }
 
+  // Bulk reject (PM req #9) — unlike bulk approve, the backend requires a
+  // reason (BulkRejectRequest.admin_comment, min_length 3), mirroring the
+  // single-reject flow's LeaveRejectRequest. Validated client-side first so
+  // the error shows as a toast rather than a raw 422 from the API.
+  const handleBulkReject = async () => {
+    if (selected.size === 0) return
+    if (bulkComment.trim().length < 3) {
+      toast('A comment (min. 3 characters) is required to reject', 'error')
+      return
+    }
+    setBulkSubmitting(true)
+    try {
+      const res = await bulkRejectLeaveRequests(Array.from(selected), bulkComment.trim())
+      toast(`${res.data.rejected_count} request(s) rejected${res.data.failed_count ? `, ${res.data.failed_count} failed` : ''}`)
+      setBulkComment('')
+      load()
+    } catch (err: any) {
+      toast(errMsg(err, 'Failed to bulk reject'), 'error')
+    } finally {
+      setBulkSubmitting(false)
+    }
+  }
+
   const handleDownloadAttachment = async (id: number, filename: string) => {
     try {
       const res = await downloadLeaveAttachment(id)
@@ -275,6 +298,9 @@ export default function AdminLeaveQueue() {
                 />
                 <Button size="sm" onClick={handleBulkApprove} loading={bulkSubmitting}>
                   <Check size={14} /> Approve Selected
+                </Button>
+                <Button size="sm" variant="destructive" onClick={handleBulkReject} loading={bulkSubmitting}>
+                  <X size={14} /> Reject Selected
                 </Button>
                 <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>Clear</Button>
               </CardContent>
