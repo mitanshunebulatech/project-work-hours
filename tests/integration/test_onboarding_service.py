@@ -2,6 +2,7 @@
 tests/integration/test_onboarding_service.py
 """
 
+from datetime import date
 from decimal import Decimal
 from io import BytesIO
 
@@ -10,6 +11,7 @@ from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError
+from app.models.department import Department
 from app.models.role import Role
 from app.models.user import User
 from app.schemas.onboarding import EmployeeOnboardingRequest
@@ -33,23 +35,40 @@ def admin_role(db_session: Session) -> Role:
     return role
 
 
-def _make_request(**overrides) -> EmployeeOnboardingRequest:
+@pytest.fixture
+def department(db_session: Session) -> Department:
+    """PM req #7: joining_date/department_id/designation/last_name are now
+    required on EmployeeOnboardingRequest, so every test needs a real
+    department to reference rather than relying on the old
+    department_id=None default."""
+    dept = Department(name="Engineering")
+    db_session.add(dept)
+    db_session.commit()
+    return dept
+
+
+def _make_request(*, department_id: int, **overrides) -> EmployeeOnboardingRequest:
     defaults = dict(
         first_name="Priya",
         last_name="Nair",
         email="priya.nair@nebulatech-test.com",
         role_id=1,
+        department_id=department_id,
+        designation="Software Engineer",
+        joining_date=date(2026, 1, 5),
     )
     defaults.update(overrides)
     return EmployeeOnboardingRequest(**defaults)
 
 
 def test_onboard_employee_creates_user_and_profile_atomically(
-    db_session: Session, employee_role: Role
+    db_session: Session, employee_role: Role, department: Department
 ):
     service = OnboardingService(db_session)
     result = service.onboard_employee(
-        _make_request(role_id=employee_role.id, department_id=None, years_of_experience=Decimal("3.5")),
+        _make_request(
+            role_id=employee_role.id, department_id=department.id, years_of_experience=Decimal("3.5")
+        ),
         actor_id=1,
         ip_address="127.0.0.1",
     )
@@ -59,17 +78,12 @@ def test_onboard_employee_creates_user_and_profile_atomically(
     assert created_user.email == "priya.nair@nebulatech-test.com"
     assert created_user.role == "employee"
     assert created_user.role_id == employee_role.id
-    # PM item 7 + the must_change_password decision: onboarding always
-    # forces a password reset on first login.
     assert created_user.must_change_password is True
 
     profile = EmployeeProfileService(db_session).get_profile(result.employee_profile_id)
     assert profile.first_name == "Priya"
     assert profile.employee_code.startswith("EMP-")
 
-    # Shown once in the response — the only place an admin can ever see it
-    # if SMTP isn't configured (email_sent is False in tests, since
-    # SMTP_HOST defaults to "" — see EmailService.enabled).
     assert result.temp_password
     from app.core.security import verify_password
 
@@ -77,14 +91,11 @@ def test_onboard_employee_creates_user_and_profile_atomically(
 
 
 def test_onboard_employee_derives_legacy_admin_role_from_system_admin_role(
-    db_session: Session, admin_role: Role
+    db_session: Session, admin_role: Role, department: Department
 ):
-    """Legacy `role` string still drives is_admin/JWT claims — onboarding
-    into the seeded system "Admin" role must set it correctly, not just
-    role_id, or the account would silently lose admin fallback access."""
     service = OnboardingService(db_session)
     result = service.onboard_employee(
-        _make_request(email="new.admin@nebulatech-test.com", role_id=admin_role.id),
+        _make_request(email="new.admin@nebulatech-test.com", role_id=admin_role.id, department_id=department.id),
         actor_id=1,
         ip_address=None,
     )
@@ -92,34 +103,40 @@ def test_onboard_employee_derives_legacy_admin_role_from_system_admin_role(
     assert created_user.role == "admin"
 
 
-def test_onboard_employee_rejects_duplicate_email(db_session: Session, employee_role: Role):
+def test_onboard_employee_rejects_duplicate_email(
+    db_session: Session, employee_role: Role, department: Department
+):
     service = OnboardingService(db_session)
     service.onboard_employee(
-        _make_request(role_id=employee_role.id), actor_id=1, ip_address=None
+        _make_request(role_id=employee_role.id, department_id=department.id), actor_id=1, ip_address=None
     )
 
     with pytest.raises(ConflictError):
         service.onboard_employee(
-            _make_request(role_id=employee_role.id), actor_id=1, ip_address=None
+            _make_request(role_id=employee_role.id, department_id=department.id), actor_id=1, ip_address=None
         )
 
 
-def test_onboard_employee_rejects_unknown_role(db_session: Session):
+def test_onboard_employee_rejects_unknown_role(db_session: Session, department: Department):
     service = OnboardingService(db_session)
     with pytest.raises(NotFoundError):
-        service.onboard_employee(_make_request(role_id=999999), actor_id=1, ip_address=None)
+        service.onboard_employee(
+            _make_request(role_id=999999, department_id=department.id), actor_id=1, ip_address=None
+        )
 
 
 def test_onboard_employee_deduplicates_username_on_collision(
-    db_session: Session, employee_role: Role
+    db_session: Session, employee_role: Role, department: Department
 ):
     service = OnboardingService(db_session)
     first = service.onboard_employee(
-        _make_request(email="one@nebulatech-test.com", role_id=employee_role.id), actor_id=1, ip_address=None
+        _make_request(email="one@nebulatech-test.com", role_id=employee_role.id, department_id=department.id),
+        actor_id=1, ip_address=None
     )
     second = service.onboard_employee(
         _make_request(
-            first_name="Priya", last_name="Nair", email="two@nebulatech-test.com", role_id=employee_role.id
+            first_name="Priya", last_name="Nair", email="two@nebulatech-test.com",
+            role_id=employee_role.id, department_id=department.id,
         ),
         actor_id=1,
         ip_address=None,
@@ -128,30 +145,23 @@ def test_onboard_employee_deduplicates_username_on_collision(
 
 
 def test_generated_temp_password_satisfies_complexity_rule(db_session: Session, employee_role: Role):
-    """The generated password must pass the same complexity rule real user
-    passwords are validated against (letter + digit, >=8 chars) — the
-    account is created with a pre-hashed password, so nothing else would
-    ever catch a generator regression that started producing weak values."""
     from app.schemas.auth import _validate_password_complexity
     from app.utils.password_generator import generate_temp_password
 
     for _ in range(50):
         pw = generate_temp_password()
         assert len(pw) == 8
-        _validate_password_complexity(pw)  # raises on failure
+        _validate_password_complexity(pw)
 
 
 def test_employee_code_sequence_never_collides_across_many_onboardings(
-    db_session: Session, employee_role: Role
+    db_session: Session, employee_role: Role, department: Department
 ):
-    """Regression pin for the MAX+1 race condition bug — not a true
-    concurrency test (the test suite is single-threaded/SQLite), but pins
-    that a run of onboardings never produces a duplicate employee_code."""
     service = OnboardingService(db_session)
     codes = set()
     for i in range(10):
         result = service.onboard_employee(
-            _make_request(email=f"person{i}@nebulatech-test.com", role_id=employee_role.id),
+            _make_request(email=f"person{i}@nebulatech-test.com", role_id=employee_role.id, department_id=department.id),
             actor_id=1,
             ip_address=None,
         )
@@ -159,10 +169,12 @@ def test_employee_code_sequence_never_collides_across_many_onboardings(
         codes.add(result.employee_code)
 
 
-def test_identity_document_upload_list_and_delete(db_session: Session, employee_role: Role):
+def test_identity_document_upload_list_and_delete(
+    db_session: Session, employee_role: Role, department: Department
+):
     onboarding = OnboardingService(db_session)
     result = onboarding.onboard_employee(
-        _make_request(role_id=employee_role.id), actor_id=1, ip_address=None
+        _make_request(role_id=employee_role.id, department_id=department.id), actor_id=1, ip_address=None
     )
 
     profile_service = EmployeeProfileService(db_session)
@@ -177,7 +189,6 @@ def test_identity_document_upload_list_and_delete(db_session: Session, employee_
         ip_address=None,
     )
     assert created.document_type == "PAN"
-    # Never returned in full — same masking posture as employee_profiles.pan_number.
     assert created.document_number_masked is not None
     assert "ABCDE1234F" not in created.document_number_masked
 
@@ -197,3 +208,48 @@ def test_identity_document_upload_requires_existing_profile(db_session: Session)
         profile_service.upload_identity_document(
             999999, document_type="PAN", document_number=None, file=upload, actor_id=1, ip_address=None
         )
+
+
+# --- PM req #7: last_name/department_id/designation/joining_date are now required ---
+
+def test_onboarding_request_rejects_missing_last_name():
+    with pytest.raises(ValueError):
+        EmployeeOnboardingRequest(
+            first_name="Priya", email="priya@nebulatech-test.com", role_id=1,
+            department_id=1, designation="Engineer", joining_date=date(2026, 1, 5),
+        )
+
+
+def test_onboarding_request_rejects_missing_department(department: Department):
+    with pytest.raises(ValueError):
+        EmployeeOnboardingRequest(
+            first_name="Priya", last_name="Nair", email="priya@nebulatech-test.com", role_id=1,
+            designation="Engineer", joining_date=date(2026, 1, 5),
+        )
+
+
+def test_onboarding_request_rejects_missing_designation(department: Department):
+    with pytest.raises(ValueError):
+        EmployeeOnboardingRequest(
+            first_name="Priya", last_name="Nair", email="priya@nebulatech-test.com", role_id=1,
+            department_id=department.id, joining_date=date(2026, 1, 5),
+        )
+
+
+def test_onboarding_request_rejects_missing_joining_date(department: Department):
+    with pytest.raises(ValueError):
+        EmployeeOnboardingRequest(
+            first_name="Priya", last_name="Nair", email="priya@nebulatech-test.com", role_id=1,
+            department_id=department.id, designation="Engineer",
+        )
+
+
+def test_onboarding_request_accepts_all_required_fields_present(department: Department):
+    req = EmployeeOnboardingRequest(
+        first_name="Priya", last_name="Nair", email="priya@nebulatech-test.com", role_id=1,
+        department_id=department.id, designation="Engineer", joining_date=date(2026, 1, 5),
+    )
+    assert req.last_name == "Nair"
+    assert req.department_id == department.id
+    assert req.designation == "Engineer"
+    assert req.joining_date == date(2026, 1, 5)

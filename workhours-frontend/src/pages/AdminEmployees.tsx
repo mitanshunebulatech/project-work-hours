@@ -98,8 +98,14 @@ export default function AdminEmployees() {
   const validateOnboard = () => {
     const e: any = {}
     if (!onboardForm.first_name.trim()) e.first_name = 'Required'
+    if (!onboardForm.last_name.trim()) e.last_name = 'Required'
     if (!onboardForm.email.trim()) e.email = 'Required'
     if (!onboardForm.role_id) e.role_id = 'Select a role'
+    // PM req #7: last_name, DOJ, Department, Designation are now required
+    // onboarding fields, matching the backend schema (EmployeeOnboardingRequest).
+    if (!onboardForm.department_id) e.department_id = 'Select a department'
+    if (!onboardForm.designation.trim()) e.designation = 'Required'
+    if (!onboardForm.joining_date) e.joining_date = 'Required'
     if (onboardForm.pan_number && !/^[A-Za-z]{5}[0-9]{4}[A-Za-z]$/.test(onboardForm.pan_number.trim()))
       e.pan_number = 'Format: AAAAA9999A (5 letters, 4 digits, 1 letter)'
     setOnboardErrors(e)
@@ -112,15 +118,15 @@ export default function AdminEmployees() {
     try {
       const res = await onboardEmployee({
         first_name: onboardForm.first_name,
-        last_name: onboardForm.last_name || null,
+        last_name: onboardForm.last_name.trim(),
         email: onboardForm.email,
         personal_phone_number: onboardForm.personal_phone_number || null,
         emergency_phone_number: onboardForm.emergency_phone_number || null,
         present_address: onboardForm.present_address || null,
-        joining_date: onboardForm.joining_date || null,
+        joining_date: onboardForm.joining_date,
         birth_date: onboardForm.birth_date || null,
-        department_id: onboardForm.department_id ? Number(onboardForm.department_id) : null,
-        designation: onboardForm.designation || null,
+        department_id: Number(onboardForm.department_id),
+        designation: onboardForm.designation.trim(),
         years_of_experience: onboardForm.years_of_experience ? Number(onboardForm.years_of_experience) : null,
         pan_number: onboardForm.pan_number ? onboardForm.pan_number.trim().toUpperCase() : null,
         role_id: Number(onboardForm.role_id),
@@ -334,8 +340,9 @@ export default function AdminEmployees() {
                 {onboardErrors.first_name && <p className="text-xs text-destructive">{onboardErrors.first_name}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Last Name</Label>
+                <Label>Last Name <span className="text-destructive">*</span></Label>
                 <Input value={onboardForm.last_name} onChange={e => setOnboardForm(f => ({ ...f, last_name: e.target.value }))} />
+                {onboardErrors.last_name && <p className="text-xs text-destructive">{onboardErrors.last_name}</p>}
               </div>
               <div className="space-y-1.5 col-span-2">
                 <Label>Email <span className="text-destructive">*</span></Label>
@@ -353,20 +360,22 @@ export default function AdminEmployees() {
                 {onboardErrors.role_id && <p className="text-xs text-destructive">{onboardErrors.role_id}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Department</Label>
+                <Label>Department <span className="text-destructive">*</span></Label>
                 <Select value={onboardForm.department_id || 'none'} onValueChange={v => setOnboardForm(f => ({ ...f, department_id: v === 'none' ? '' : v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">Unassigned</SelectItem>
+                    <SelectItem value="none">Select…</SelectItem>
                     {departments.map(d => (
                       <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {onboardErrors.department_id && <p className="text-xs text-destructive">{onboardErrors.department_id}</p>}
               </div>
               <div className="space-y-1.5">
-                <Label>Designation</Label>
+                <Label>Designation <span className="text-destructive">*</span></Label>
                 <Input value={onboardForm.designation} onChange={e => setOnboardForm(f => ({ ...f, designation: e.target.value }))} />
+                {onboardErrors.designation && <p className="text-xs text-destructive">{onboardErrors.designation}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label>Years of Experience</Label>
@@ -382,8 +391,9 @@ export default function AdminEmployees() {
                 <Input value={onboardForm.emergency_phone_number} onChange={e => setOnboardForm(f => ({ ...f, emergency_phone_number: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Joining Date</Label>
+                <Label>Joining Date <span className="text-destructive">*</span></Label>
                 <Input type="date" value={onboardForm.joining_date} onChange={e => setOnboardForm(f => ({ ...f, joining_date: e.target.value }))} />
+                {onboardErrors.joining_date && <p className="text-xs text-destructive">{onboardErrors.joining_date}</p>}
               </div>
               <div className="space-y-1.5">
                 <Label>Birth Date</Label>
