@@ -53,8 +53,8 @@ export default function AdminTimesheets() {
     (async () => {
       try {
         const [usersRes, projectsRes] = await Promise.all([
-          getUsers({ size: 200, is_active: true }),
-          getProjects({ size: 200, is_active: true }),
+          getUsers({ size: 100, is_active: true }),
+          getProjects({ size: 100, is_active: true }),
         ])
         setEmployeeOptions(
           usersRes.data.items.map((u: any) => ({ value: u.id, label: u.username }))
@@ -72,7 +72,7 @@ export default function AdminTimesheets() {
     setLoading(true)
     try {
       const dateStr = toApiDateString(selectedDate)
-      const params: any = { page: 1, size: 200, date_from: dateStr, date_to: dateStr }
+      const params: any = { page: 1, size: 100, date_from: dateStr, date_to: dateStr }
       if (statusFilter !== 'all') params.status = statusFilter
       if (employeeIds.length > 0) params.employee_ids = employeeIds
       if (projectIds.length > 0) params.project_ids = projectIds

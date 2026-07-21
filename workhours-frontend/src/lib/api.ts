@@ -309,13 +309,13 @@ export const updateEmployeeProfile = (
 export const getEmployeePicture = (profileId: number) =>
   api.get(`/employees/${profileId}/picture`, { responseType: 'blob' })
 
-// PM item 7: the single combined onboarding workflow — creates User +
+//the single combined onboarding workflow — creates User +
 // EmployeeProfile + assigns role/department + sends welcome email in one
 // call. Distinct from createEmployeeProfile above, which assumes a User
 // already exists (kept as the "attach to existing user" secondary flow).
 export const onboardEmployee = (data: {
   first_name: string
-  last_name?: string | null
+  last_name: string
   email: string
   personal_phone_number?: string | null
   emergency_phone_number?: string | null
