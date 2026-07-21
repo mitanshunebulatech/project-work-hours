@@ -32,7 +32,7 @@ export default function AdminHolidays() {
   const load = async () => {
     setLoading(true)
     try {
-      const res = await getHolidays({ year, page: 1, size: 1000 })
+      const res = await getHolidays({ year, page: 1, size: 100 })
       const items = [...res.data.items].sort((a: any, b: any) => a.date.localeCompare(b.date))
       setHolidays(items)
     } catch {
