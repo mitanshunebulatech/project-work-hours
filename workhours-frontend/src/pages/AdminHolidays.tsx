@@ -91,6 +91,16 @@ export default function AdminHolidays() {
     }
   }
 
+  const handleReactivate = async (h: any) => {
+    try {
+      await updateHoliday(h.id, { is_active: true })
+      toast('Holiday reactivated')
+      load()
+    } catch (err: any) {
+      toast(err.response?.data?.detail || 'Failed to reactivate holiday', 'error')
+    }
+  }
+
   const handlePublish = async () => {
     setPublishing(true)
     try {
@@ -227,7 +237,11 @@ export default function AdminHolidays() {
                           <ToggleRight size={16} />
                         </button>
                       )}
-                      {!h.is_active && <ToggleLeft size={16} className="text-muted-foreground/40" />}
+                      {!h.is_active && (
+                        <button onClick={() => handleReactivate(h)} className="text-muted-foreground/40 hover:text-emerald-500" title="Reactivate">
+                          <ToggleLeft size={16} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
