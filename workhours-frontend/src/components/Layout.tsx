@@ -9,6 +9,7 @@ import {
   Building2, Users2, ShieldCheck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { features } from '@/lib/features'
 import { ReactNode, useState } from 'react'
 import { UserAvatar } from '@/components/ui/avatar'
 import {
@@ -18,7 +19,14 @@ import {
 import NotificationBell from '@/components/NotificationBell'
 import NebulaTechIcon from '@/components/NebulaTechIcon'
 
-interface NavItem { label: string; to: string; icon: ReactNode; adminOnly?: boolean; employeeOnly?: boolean }
+interface NavItem {
+  label: string
+  to: string
+  icon: ReactNode
+  adminOnly?: boolean
+  employeeOnly?: boolean
+  enabled?: boolean
+}
 
 const navItems: NavItem[] = [
   { label: 'Dashboard', to: '/dashboard', icon: <LayoutDashboard size={18} /> },
@@ -35,13 +43,13 @@ const navItems: NavItem[] = [
   { label: 'Leave Approvals', to: '/admin/leave', icon: <CalendarCheck size={18} />, adminOnly: true },
   { label: 'Leave Calendar', to: '/admin/leave-calendar', icon: <CalendarDays size={18} />, adminOnly: true },
   { label: 'Holiday Calendar', to: '/admin/holidays', icon: <CalendarDays size={18} />, adminOnly: true },
-  { label: 'Roles', to: '/admin/roles', icon: <ShieldCheck size={18} />, adminOnly: true },
+  { label: 'Roles', to: '/admin/roles', icon: <ShieldCheck size={18} />, adminOnly: true, enabled: features.adminRoles },
   { label: 'Departments', to: '/admin/departments', icon: <Building2 size={18} />, adminOnly: true },
   { label: 'User Accounts', to: '/admin/users', icon: <Users size={18} />, adminOnly: true },
   { label: 'Employees', to: '/admin/employees', icon: <Users2 size={18} />, adminOnly: true },
   { label: 'Projects', to: '/admin/projects', icon: <FolderOpen size={18} />, adminOnly: true },
-  { label: 'Reports', to: '/admin/reports', icon: <BarChart3 size={18} />, adminOnly: true },
-  { label: 'Audit Log', to: '/admin/audit', icon: <Shield size={18} />, adminOnly: true },
+  { label: 'Reports', to: '/admin/reports', icon: <BarChart3 size={18} />, adminOnly: true, enabled: features.adminReports },
+  { label: 'Audit Log', to: '/admin/audit', icon: <Shield size={18} />, adminOnly: true, enabled: features.adminAudit },
 ]
 
 const PAGE_TITLES: Record<string, string> = {
@@ -79,7 +87,9 @@ export default function Layout({ children }: { children: ReactNode }) {
     navigate('/login')
   }
 
-  const visibleNav = navItems.filter(i => (!i.adminOnly || isAdmin) && (!i.employeeOnly || !isAdmin))
+  const visibleNav = navItems.filter(
+    i => i.enabled !== false && (!i.adminOnly || isAdmin) && (!i.employeeOnly || !isAdmin)
+  )
   const pageTitle = PAGE_TITLES[location.pathname] || 'WorkHours'
 
   return (

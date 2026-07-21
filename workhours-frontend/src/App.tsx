@@ -5,6 +5,7 @@ import { ToastProvider } from '@/hooks/useToast'
 import { ThemeProvider } from '@/hooks/useTheme'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import Layout from '@/components/Layout'
+import { features } from '@/lib/features'
 import Login from '@/pages/Login'
 import ForcedPasswordChange from '@/pages/ForcedPasswordChange'
 
@@ -96,12 +97,18 @@ function AppRoutes() {
                 <Route path="/admin/leave-calendar" element={<ProtectedRoute adminOnly><LeaveCalendar /></ProtectedRoute>} />
                 <Route path="/admin/holidays" element={<ProtectedRoute adminOnly><AdminHolidays /></ProtectedRoute>} />
                 <Route path="/admin/users" element={<ProtectedRoute adminOnly><AdminUsers /></ProtectedRoute>} />
-                <Route path="/admin/roles" element={<ProtectedRoute adminOnly><AdminRoles /></ProtectedRoute>} />
                 <Route path="/admin/departments" element={<ProtectedRoute adminOnly><AdminDepartments /></ProtectedRoute>} />
                 <Route path="/admin/employees" element={<ProtectedRoute adminOnly><AdminEmployees /></ProtectedRoute>} />
                 <Route path="/admin/projects" element={<ProtectedRoute adminOnly><AdminProjects /></ProtectedRoute>} />
-                <Route path="/admin/reports" element={<ProtectedRoute adminOnly><AdminReports /></ProtectedRoute>} />
-                <Route path="/admin/audit" element={<ProtectedRoute adminOnly><AdminAudit /></ProtectedRoute>} />
+                {features.adminRoles && (
+                  <Route path="/admin/roles" element={<ProtectedRoute adminOnly><AdminRoles /></ProtectedRoute>} />
+                )}
+                {features.adminReports && (
+                  <Route path="/admin/reports" element={<ProtectedRoute adminOnly><AdminReports /></ProtectedRoute>} />
+                )}
+                {features.adminAudit && (
+                  <Route path="/admin/audit" element={<ProtectedRoute adminOnly><AdminAudit /></ProtectedRoute>} />
+                )}
                 <Route path="*" element={<Navigate to="/dashboard" replace />} />
               </Routes>
             </Suspense>
