@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, Badge } from '@/components/ui
 import { UserAvatar } from '@/components/ui/avatar'
 import { CardGridSkeleton, TableSkeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
+import HolidayWidget from '@/components/HolidayWidget'
 import {
   Clock, AlertCircle, Plane, CalendarDays, UserX, Activity, Inbox, ArrowRight,
 } from 'lucide-react'
@@ -222,6 +223,10 @@ function AdminDashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <div className="mt-6">
+        <HolidayWidget viewMoreTo="/admin/holidays" />
+      </div>
     </div>
   )
 }
@@ -333,6 +338,10 @@ function EmployeeDashboard() {
           )}
         </CardContent>
       </Card>
+
+      <div className="mt-6">
+        <HolidayWidget />
+      </div>
     </div>
   )
 }
