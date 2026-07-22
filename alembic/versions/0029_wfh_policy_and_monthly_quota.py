@@ -1,19 +1,19 @@
-"""add monthly_quota_days to leave_policies, create WFH policy row
+﻿"""add monthly_quota_days to leave_policies, create WFH policy row
 
 Revision ID: 0029
 Revises: 0028
 Create Date: 2026-07-23 00:00:29
 
 Completes the leave-wallet redesign started in 0028 (auto_grant_enabled +
-leave_plans hard-drop): WFH never had a policy row (see migration 0013 —
+leave_plans hard-drop): WFH never had a policy row (see migration 0013 -
 meaning WFH previously had ZERO limits of any kind, not "broken", just
 unrestricted). It gets one now so its request-time validation
 (max_consecutive_days/min_notice_days) and balance check actually engage
-— both are gated on "a policy row exists" in leave_service.py.
+- both are gated on "a policy row exists" in leave_service.py.
 
 annual_quota_days is required-but-meaningless for WFH here (set to 0.00)
 since auto_grant_enabled=False routes it away from AnnualGrantService
-entirely — WFH is credited by a separate monthly mechanism (its own
+entirely - WFH is credited by a separate monthly mechanism (its own
 service, a later stage), not the annual grant job.
 
 Deliberately does NOT touch CL/SL/Birthday's auto_grant_enabled (0028
@@ -25,6 +25,7 @@ undo or second-guess that sequencing decision).
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from alembic import op
 
@@ -61,20 +62,24 @@ def upgrade() -> None:
     )
 
     conn = op.get_bind()
-    conn.execute(
-        leave_policies_table.insert().values(
-            leave_type_id=WFH_LEAVE_TYPE_ID,
-            annual_quota_days=0.00,
-            max_consecutive_days=2,
-            min_notice_days=0,
-            carry_forward_cap_days=None,
-            carry_forward_expiry_month=None,
-            accrual_frequency="monthly",
-            effective_year=current_year,
-            auto_grant_enabled=False,
-            monthly_quota_days=2.00,
-        )
+    # ON CONFLICT DO NOTHING on uq_policy_type_year: makes this migration safe
+    # to re-run against a database that already has a (WFH, current_year) row
+    # - e.g. a prior partial application of this same migration, or a manual
+    # seed - instead of raising UniqueViolation and aborting the upgrade.
+    stmt = pg_insert(leave_policies_table).values(
+        leave_type_id=WFH_LEAVE_TYPE_ID,
+        annual_quota_days=0.00,
+        max_consecutive_days=2,
+        min_notice_days=0,
+        carry_forward_cap_days=None,
+        carry_forward_expiry_month=None,
+        accrual_frequency="monthly",
+        effective_year=current_year,
+        auto_grant_enabled=False,
+        monthly_quota_days=2.00,
     )
+    stmt = stmt.on_conflict_do_nothing(constraint="uq_policy_type_year")
+    conn.execute(stmt)
 
 
 def downgrade() -> None:
