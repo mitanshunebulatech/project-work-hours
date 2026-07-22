@@ -101,12 +101,6 @@ def _build_test_metadata() -> MetaData:
     Base.metadata.tables["leave_balances"].to_metadata(test_metadata)
     Base.metadata.tables["leave_ledger"].to_metadata(test_metadata)
 
-    # Leave Planning (Stage 2/3): leave_plans, needed for
-    # LeavePlanRepository integration tests. Only portable column types
-    # (Integer/Date/DateTime/Text) — no stand-in required, same reasoning
-    # as leave_types/leave_requests above.
-    Base.metadata.tables["leave_plans"].to_metadata(test_metadata)
-
     # Part 4 (must_change_password): AuthService.login()/logout()/
     # change_password() all touch refresh_tokens (create/revoke). Portable
     # column types only (Integer/Text/DateTime/Boolean), same reasoning as

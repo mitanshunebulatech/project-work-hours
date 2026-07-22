@@ -15,7 +15,6 @@ from app.api.v1.endpoints import (
     holidays,
     leave_balances,
     leave_ledger,
-    leave_plans,
     leave_requests,
     leave_types,
     notifications,
@@ -42,7 +41,6 @@ api_router.include_router(audit.router)
 api_router.include_router(holidays.router)
 api_router.include_router(leave_ledger.router)
 api_router.include_router(leave_requests.router)
-api_router.include_router(leave_plans.router)
 api_router.include_router(leave_types.router)
 api_router.include_router(leave_balances.router)
 api_router.include_router(notifications.router)

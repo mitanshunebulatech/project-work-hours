@@ -6,6 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import (
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -42,6 +43,12 @@ class LeavePolicy(Base):
     carry_forward_expiry_month: Mapped[int | None] = mapped_column(Integer, nullable=True)
     accrual_frequency: Mapped[str] = mapped_column(String(20), nullable=False, default="upfront")
     effective_year: Mapped[int] = mapped_column(Integer, nullable=False)
+    # HRMS V3: gates AnnualGrantService.run() per policy — added so the new
+    # admin-input balance model (set at onboarding, edited in the Leave
+    # Balance tab) can disable automatic annual granting for a leave type
+    # without losing the policy's other config (max_consecutive_days,
+    # carry_forward, etc.). Defaults True to preserve current behavior.
+    auto_grant_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
