@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     # Disable in tests / when running multiple instances (BackgroundScheduler runs
     # in-process; a multi-instance deployment would need a distributed lock instead).
     ENABLE_ANNUAL_GRANT_SCHEDULER: bool = True
+    # Runs Dec 31, ahead of the annual grant job (Jan 1), so next year's
+    # policy rows already exist by the time AnnualGrantService needs them.
+    ENABLE_POLICY_ROLLOVER_SCHEDULER: bool = True
 
     # --- Field-level encryption (Sprint 1: encrypted PAN on employee_profiles) ---
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
