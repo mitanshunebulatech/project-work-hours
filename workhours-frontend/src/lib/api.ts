@@ -241,27 +241,6 @@ export const getPublishedHolidays = (year: number) => api.get(`/holidays/publish
 export const publishHolidayYear = (year: number) => api.post(`/holidays/publish/${year}`)
 export const unpublishHolidayYear = (year: number) => api.post(`/holidays/unpublish/${year}`)
 
-// --- Leave Plans (PM req #6 — informational yearly planning, separate
-// from Leave Requests/approval workflow; see LeavePlanService docstring) ---
-export const getLeavePlans = (params?: object) => api.get('/leave-plans', { params })
-export const getLeavePlan = (id: number) => api.get(`/leave-plans/${id}`)
-export const createLeavePlan = (data: {
-  leave_type_id: number
-  planned_start_date: string
-  planned_end_date: string
-  reason?: string | null
-}) => api.post('/leave-plans', data)
-export const updateLeavePlan = (
-  id: number,
-  data: {
-    leave_type_id?: number
-    planned_start_date?: string
-    planned_end_date?: string
-    reason?: string | null
-  }
-) => api.patch(`/leave-plans/${id}`, data)
-export const deleteLeavePlan = (id: number) => api.delete(`/leave-plans/${id}`)
-
 // --- Departments ---
 export const getDepartments = (params?: object) => api.get('/departments', { params })
 export const createDepartment = (data: { name: string; description?: string | null }) =>

@@ -40,6 +40,25 @@ def _run_annual_grant_job() -> None:
         db.close()
 
 
+def _run_policy_rollover_job() -> None:
+    """
+    Fires Dec 31, ahead of _run_annual_grant_job (Jan 1) — creates next
+    year's LeavePolicy rows (carrying forward auto_grant_enabled and every
+    other field) so the annual grant job has something to read the
+    following morning. Idempotent — LeavePolicyRolloverService skips any
+    leave_type that already has a row for the target year.
+    """
+    from app.db.session import SessionLocal
+    from app.services.leave_policy_rollover_service import LeavePolicyRolloverService
+
+    db = SessionLocal()
+    try:
+        current_year = datetime.now(timezone.utc).year
+        LeavePolicyRolloverService(db).run(from_year=current_year, to_year=current_year + 1)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler = BackgroundScheduler()
@@ -51,6 +70,15 @@ async def lifespan(app: FastAPI):
             id="annual_leave_grant",
             replace_existing=True,
         )
+    if settings.ENABLE_POLICY_ROLLOVER_SCHEDULER:
+        # Fires Dec 31, 23:00 — ahead of the Jan 1 00:05 annual grant job.
+        scheduler.add_job(
+            _run_policy_rollover_job,
+            trigger=CronTrigger(month=12, day=31, hour=23, minute=0),
+            id="leave_policy_rollover",
+            replace_existing=True,
+        )
+    if settings.ENABLE_ANNUAL_GRANT_SCHEDULER or settings.ENABLE_POLICY_ROLLOVER_SCHEDULER:
         scheduler.start()
     app.state.scheduler = scheduler
 

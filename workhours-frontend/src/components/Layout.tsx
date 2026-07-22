@@ -37,7 +37,6 @@ const navItems: NavItem[] = [
   // that only leads to a 403.
   { label: 'My Timesheets', to: '/timesheets', icon: <Clock size={18} />, employeeOnly: true },
   { label: 'Leave', to: '/leave', icon: <Plane size={18} /> },
-  { label: 'Leave Planning', to: '/leave-plans', icon: <CalendarCheck size={18} /> },
   { label: 'Holidays', to: '/holidays', icon: <CalendarDays size={18} /> },
   { label: 'Timesheets', to: '/admin/timesheets', icon: <Clock size={18} />, adminOnly: true },
   { label: 'Leave Approvals', to: '/admin/leave', icon: <CalendarCheck size={18} />, adminOnly: true },
@@ -56,7 +55,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/timesheets': 'My Timesheets',
   '/leave': 'Leave',
-  '/leave-plans': 'Leave Planning',
   '/holidays': 'Holidays',
   '/profile': 'My Profile',
   '/admin/timesheets': 'Timesheets',

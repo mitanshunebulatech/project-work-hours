@@ -45,7 +45,15 @@ class AnnualGrantService:
         for leave_type in active_types:
             policy = self.leave_policy_repo.get_for_type_year(leave_type_id=leave_type.id, year=year)
             if policy is None:
-                # No policy for this type/year (e.g. LOP, WFH by design) — nothing to grant.
+                # No policy for this type/year (e.g. LOP by design) — nothing to grant.
+                continue
+            if not policy.auto_grant_enabled:
+                # HRMS V3: admin-input leave types (CL/SL/Birthday) and
+                # separately-mechanized ones (WFH, monthly not annual) keep
+                # their policy row for max_consecutive_days/min_notice_days
+                # validation, but this flag is what actually stops
+                # AnnualGrantService from also granting them — without
+                # this check the column would exist but do nothing.
                 continue
 
             for employee in active_employees:

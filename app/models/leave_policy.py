@@ -49,6 +49,12 @@ class LeavePolicy(Base):
     # without losing the policy's other config (max_consecutive_days,
     # carry_forward, etc.). Defaults True to preserve current behavior.
     auto_grant_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # WFH-specific: the "2 per month" figure. Deliberately separate from
+    # annual_quota_days (which stays required-but-meaningless for WFH,
+    # set to 0.00) — overloading one field with two different
+    # cadences/meanings was rejected as more confusing than a second
+    # nullable column.
+    monthly_quota_days: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

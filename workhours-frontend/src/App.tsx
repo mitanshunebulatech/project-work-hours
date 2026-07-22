@@ -25,7 +25,6 @@ const AdminLeaveQueue = lazy(() => import('@/pages/AdminLeaveQueue'))
 const LeaveCalendar = lazy(() => import('@/pages/LeaveCalendar'))
 const AdminHolidays = lazy(() => import('@/pages/AdminHolidays'))
 const HolidayCalendar = lazy(() => import('@/pages/HolidayCalendar'))
-const LeavePlans = lazy(() => import('@/pages/LeavePlans'))
 
 function FullscreenSpinner() {
   return (
@@ -89,7 +88,6 @@ function AppRoutes() {
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/timesheets" element={<Timesheets />} />
                 <Route path="/leave" element={<Leave />} />
-                <Route path="/leave-plans" element={<LeavePlans />} />
                 <Route path="/holidays" element={<HolidayCalendar />} />
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/admin/timesheets" element={<ProtectedRoute adminOnly><AdminTimesheets /></ProtectedRoute>} />
