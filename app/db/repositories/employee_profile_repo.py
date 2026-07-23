@@ -45,12 +45,22 @@ class EmployeeProfileRepository(BaseRepository[EmployeeProfile]):
     def search(
         self,
         *,
+        search: str | None = None,
         department_id: int | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[EmployeeProfile], int]:
         stmt = select(EmployeeProfile)
         count_stmt = select(func.count()).select_from(EmployeeProfile)
+
+        if search:
+            pattern = f"%{search.lower()}%"
+            condition = func.lower(EmployeeProfile.full_name).like(pattern) | func.lower(
+                EmployeeProfile.employee_code
+            ).like(pattern)
+            stmt = stmt.where(condition)
+            count_stmt = count_stmt.where(condition)
+
         if department_id is not None:
             stmt = stmt.where(EmployeeProfile.department_id == department_id)
             count_stmt = count_stmt.where(EmployeeProfile.department_id == department_id)
