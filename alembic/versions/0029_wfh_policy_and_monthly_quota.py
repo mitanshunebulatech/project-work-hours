@@ -61,20 +61,44 @@ def upgrade() -> None:
     )
 
     conn = op.get_bind()
-    conn.execute(
-        leave_policies_table.insert().values(
-            leave_type_id=WFH_LEAVE_TYPE_ID,
-            annual_quota_days=0.00,
-            max_consecutive_days=2,
-            min_notice_days=0,
-            carry_forward_cap_days=None,
-            carry_forward_expiry_month=None,
-            accrual_frequency="monthly",
-            effective_year=current_year,
-            auto_grant_enabled=False,
-            monthly_quota_days=2.00,
+
+    # Idempotent: a WFH policy row for this year may already exist (e.g.
+    # from a prior partial/failed run of this exact migration) — never
+    # overwrite an existing row's other values, only fill the gap if it's
+    # genuinely missing.
+    existing = conn.execute(
+        sa.select(leave_policies_table.c.leave_type_id).where(
+            leave_policies_table.c.leave_type_id == WFH_LEAVE_TYPE_ID,
+            leave_policies_table.c.effective_year == current_year,
         )
-    )
+    ).first()
+
+    if existing is None:
+        conn.execute(
+            leave_policies_table.insert().values(
+                leave_type_id=WFH_LEAVE_TYPE_ID,
+                annual_quota_days=0.00,
+                max_consecutive_days=2,
+                min_notice_days=0,
+                carry_forward_cap_days=None,
+                carry_forward_expiry_month=None,
+                accrual_frequency="monthly",
+                effective_year=current_year,
+                auto_grant_enabled=False,
+                monthly_quota_days=2.00,
+            )
+        )
+    else:
+        # Row already existed (from the earlier failed attempt) before
+        # monthly_quota_days existed as a column — backfill just that value.
+        conn.execute(
+            leave_policies_table.update()
+            .where(
+                leave_policies_table.c.leave_type_id == WFH_LEAVE_TYPE_ID,
+                leave_policies_table.c.effective_year == current_year,
+            )
+            .values(monthly_quota_days=2.00)
+        )
 
 
 def downgrade() -> None:

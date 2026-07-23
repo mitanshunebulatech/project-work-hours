@@ -67,3 +67,21 @@ class LeaveLedgerRepository:
         )
         count = self.db.execute(stmt).scalar_one()
         return count > 0
+
+    def has_monthly_grant_for_month(
+        self, *, employee_id: int, leave_type_id: int, year: int, month: int
+    ) -> bool:
+        """
+        Same idempotency shape as has_annual_grant_for_year, scoped to a
+        specific month — guards WfhMonthlyGrantService against
+        double-crediting if its job reruns within the same month.
+        """
+        stmt = select(func.count()).select_from(LeaveLedgerEntry).where(
+            LeaveLedgerEntry.employee_id == employee_id,
+            LeaveLedgerEntry.leave_type_id == leave_type_id,
+            LeaveLedgerEntry.transaction_type == "monthly_grant",
+            extract("year", LeaveLedgerEntry.created_at) == year,
+            extract("month", LeaveLedgerEntry.created_at) == month,
+        )
+        count = self.db.execute(stmt).scalar_one()
+        return count > 0

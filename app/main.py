@@ -59,6 +59,24 @@ def _run_policy_rollover_job() -> None:
         db.close()
 
 
+def _run_wfh_monthly_grant_job() -> None:
+    """
+    Fires on the 1st of every month — WFH's automatic credit (confirmed:
+    no admin action needed, unlike CL/SL/Birthday's admin-manual balance).
+    Idempotent per employee/month via has_monthly_grant_for_month, same
+    shape as the annual grant job's own guard.
+    """
+    from app.db.session import SessionLocal
+    from app.services.wfh_monthly_grant_service import WfhMonthlyGrantService
+
+    db = SessionLocal()
+    try:
+        now = datetime.now(timezone.utc)
+        WfhMonthlyGrantService(db).run(year=now.year, month=now.month)
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     scheduler = BackgroundScheduler()
@@ -78,7 +96,19 @@ async def lifespan(app: FastAPI):
             id="leave_policy_rollover",
             replace_existing=True,
         )
-    if settings.ENABLE_ANNUAL_GRANT_SCHEDULER or settings.ENABLE_POLICY_ROLLOVER_SCHEDULER:
+    if settings.ENABLE_WFH_MONTHLY_GRANT_SCHEDULER:
+        # Fires just after midnight on the 1st of every month.
+        scheduler.add_job(
+            _run_wfh_monthly_grant_job,
+            trigger=CronTrigger(day=1, hour=0, minute=10),
+            id="wfh_monthly_grant",
+            replace_existing=True,
+        )
+    if (
+        settings.ENABLE_ANNUAL_GRANT_SCHEDULER
+        or settings.ENABLE_POLICY_ROLLOVER_SCHEDULER
+        or settings.ENABLE_WFH_MONTHLY_GRANT_SCHEDULER
+    ):
         scheduler.start()
     app.state.scheduler = scheduler
 

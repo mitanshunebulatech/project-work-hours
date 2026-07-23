@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 class LedgerTransactionType(str, Enum):
     ANNUAL_GRANT = "annual_grant"
+    MONTHLY_GRANT = "monthly_grant"
     ADMIN_ADJUSTMENT = "admin_adjustment"
     CARRY_FORWARD = "carry_forward"
     CORRECTION = "correction"
