@@ -94,12 +94,17 @@ class LeaveLedgerService:
         self, payload: SetBalanceRequest, *, actor_id: int, ip_address: str | None
     ) -> LedgerAdjustmentResponse:
         """
-        HRMS V3 Work Leave Balance: admin sets CL/SL/WFH to an absolute
-        number, any time. Reads the current balance, computes the signed
-        delta against target_days, and writes it through create_adjustment
-        — the exact same path every other balance-affecting write already
-        goes through (annual grant, leave debit, manual +/- adjustment), so
-        this never becomes a second, divergent way of touching a balance.
+        HRMS V3 Work Leave Balance: admin sets a leave type to an absolute
+        number, any time — the primary mechanism for CL/SL/Birthday (fully
+        admin-manual, no auto-grant). WFH is normally auto-credited monthly
+        by WfhMonthlyGrantService instead, but this endpoint still works on
+        WFH too for manual corrections (e.g. fixing a missed automatic
+        grant) — it's just not how WFH's balance is meant to be set day to
+        day. Reads the current balance, computes the signed delta against
+        target_days, and writes it through create_adjustment — the exact
+        same path every other balance-affecting write already goes through
+        (annual grant, monthly grant, leave debit, manual +/- adjustment),
+        so this never becomes a second, divergent way of touching a balance.
         A target equal to the current balance is a legitimate no-op (e.g.
         admin re-confirms a number without changing it) — not an error, but
         create_adjustment() rejects a zero amount_days, so that case skips

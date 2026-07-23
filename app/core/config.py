@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     # Runs Dec 31, ahead of the annual grant job (Jan 1), so next year's
     # policy rows already exist by the time AnnualGrantService needs them.
     ENABLE_POLICY_ROLLOVER_SCHEDULER: bool = True
+    # Fires on the 1st of every month — WFH's separate monthly credit,
+    # distinct cadence from the annual grant job above.
+    ENABLE_WFH_MONTHLY_GRANT_SCHEDULER: bool = True
 
     # --- Field-level encryption (Sprint 1: encrypted PAN on employee_profiles) ---
     # Generate with: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"

@@ -181,3 +181,66 @@ def test_set_balance_rejects_inactive_leave_type(db_session: Session, seeded_use
             ),
             actor_id=seeded_users["bob"].id, ip_address=None,
         )
+
+
+# ---------- WfhMonthlyGrantService: automatic monthly WFH credit ----------
+
+
+def _make_wfh_type_with_monthly_policy(db_session: Session) -> LeaveType:
+    wfh = LeaveType(code="WFH", display_name="Work From Home", is_paid=True, allows_half_day=False)
+    db_session.add(wfh)
+    db_session.commit()
+    db_session.add(
+        LeavePolicy(
+            leave_type_id=wfh.id,
+            annual_quota_days=Decimal("0"),
+            max_consecutive_days=2,
+            min_notice_days=0,
+            accrual_frequency="monthly",
+            effective_year=CURRENT_YEAR,
+            auto_grant_enabled=False,
+            monthly_quota_days=Decimal("2"),
+        )
+    )
+    db_session.commit()
+    return wfh
+
+
+def test_wfh_monthly_grant_credits_every_active_employee(db_session: Session, seeded_users):
+    from app.services.wfh_monthly_grant_service import WfhMonthlyGrantService
+
+    _make_wfh_type_with_monthly_policy(db_session)
+
+    result = WfhMonthlyGrantService(db_session).run(year=CURRENT_YEAR, month=7)
+
+    assert result["granted"] == 2  # alice + bob
+    assert result["skipped"] == 0
+    assert result["errors"] == []
+
+
+def test_wfh_monthly_grant_is_idempotent_within_the_same_month(db_session: Session, seeded_users):
+    from app.services.wfh_monthly_grant_service import WfhMonthlyGrantService
+
+    _make_wfh_type_with_monthly_policy(db_session)
+    service = WfhMonthlyGrantService(db_session)
+
+    first = service.run(year=CURRENT_YEAR, month=7)
+    second = service.run(year=CURRENT_YEAR, month=7)
+
+    assert first["granted"] == 2
+    assert second["granted"] == 0
+    assert second["skipped"] == 2
+
+
+def test_wfh_monthly_grant_noop_when_no_policy_for_year(db_session: Session, seeded_users):
+    from app.services.wfh_monthly_grant_service import WfhMonthlyGrantService
+
+    wfh = LeaveType(code="WFH", display_name="Work From Home", is_paid=True, allows_half_day=False)
+    db_session.add(wfh)
+    db_session.commit()
+    # Deliberately no LeavePolicy row created — service must not crash.
+
+    result = WfhMonthlyGrantService(db_session).run(year=CURRENT_YEAR, month=7)
+
+    assert result["granted"] == 0
+    assert "No WFH policy" in result["errors"][0]
