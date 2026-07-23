@@ -6,7 +6,7 @@ import {
   Clock, LayoutDashboard, Users, FolderOpen,
   BarChart3, Shield, LogOut, ChevronLeft, ChevronRight,
   Search, Moon, Sun, Settings, User as UserIcon, Command, Plane, CalendarCheck, CalendarDays,
-  Building2, Users2, ShieldCheck
+  Building2, Users2, ShieldCheck, Wallet
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { features } from '@/lib/features'
@@ -40,6 +40,7 @@ const navItems: NavItem[] = [
   { label: 'Holidays', to: '/holidays', icon: <CalendarDays size={18} /> },
   { label: 'Timesheets', to: '/admin/timesheets', icon: <Clock size={18} />, adminOnly: true },
   { label: 'Leave Approvals', to: '/admin/leave', icon: <CalendarCheck size={18} />, adminOnly: true },
+  { label: 'Work Leave Balance', to: '/admin/leave-balance', icon: <Wallet size={18} />, adminOnly: true },
   { label: 'Leave Calendar', to: '/admin/leave-calendar', icon: <CalendarDays size={18} />, adminOnly: true },
   { label: 'Holiday Calendar', to: '/admin/holidays', icon: <CalendarDays size={18} />, adminOnly: true },
   { label: 'Roles', to: '/admin/roles', icon: <ShieldCheck size={18} />, adminOnly: true, enabled: features.adminRoles },
@@ -59,6 +60,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/profile': 'My Profile',
   '/admin/timesheets': 'Timesheets',
   '/admin/leave': 'Leave Approvals',
+  '/admin/leave-balance': 'Work Leave Balance',
   '/admin/leave-calendar': 'Leave Calendar',
   '/admin/holidays': 'Holiday Calendar',
   '/admin/roles': 'Roles',
