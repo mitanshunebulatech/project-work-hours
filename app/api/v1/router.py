@@ -22,6 +22,7 @@ from app.api.v1.endpoints import (
     projects,
     reports,
     roles,
+    search,
     users,
     work_schedule_policy,
 )
@@ -47,3 +48,4 @@ api_router.include_router(notifications.router)
 api_router.include_router(departments.router)
 api_router.include_router(employees.router)
 api_router.include_router(work_schedule_policy.router)
+api_router.include_router(search.router)

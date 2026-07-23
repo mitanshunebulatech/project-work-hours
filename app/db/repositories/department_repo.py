@@ -18,12 +18,20 @@ class DepartmentRepository(BaseRepository[Department]):
     def search(
         self,
         *,
+        search: str | None = None,
         is_active: bool | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> tuple[list[Department], int]:
         stmt = select(Department)
         count_stmt = select(func.count()).select_from(Department)
+
+        if search:
+            pattern = f"%{search.lower()}%"
+            condition = func.lower(Department.name).like(pattern)
+            stmt = stmt.where(condition)
+            count_stmt = count_stmt.where(condition)
+
         if is_active is not None:
             stmt = stmt.where(Department.is_active == is_active)
             count_stmt = count_stmt.where(Department.is_active == is_active)
