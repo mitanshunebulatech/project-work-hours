@@ -9,7 +9,6 @@ from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user, require_permission
 from app.db.repositories.leave_balance_repo import LeaveBalanceRepository
-from app.db.repositories.leave_policy_repo import LeavePolicyRepository
 from app.db.repositories.leave_type_repo import LeaveTypeRepository
 from app.db.session import get_db
 from app.models.user import User
@@ -20,23 +19,24 @@ router = APIRouter(prefix="/leave-balances", tags=["Leave Balances"])
 
 def _balances_for_employee(db: Session, employee_id: int, year: int) -> list[LeaveBalanceResponse]:
     """
-    Shows one row per active leave type that actually has a policy for this
-    year (LOP and WFH have none by design — see migration 0013 — so they
-    never appear here, matching preview_request()'s own is_paid+policy gate).
+    Shows one row per active, paid leave type — HRMS V3: this used to skip
+    any type with no LeavePolicy row for the year, which meant WFH (paid,
+    but intentionally policy-less per migration 0013) could never appear in
+    an employee's or admin's balance view at all. Now that CL/SL/WFH are all
+    admin-managed via LeaveLedgerService.set_balance() rather than tied to
+    an annual policy grant, "has a policy row" is no longer the right test
+    for "should this show up" — is_paid alone is (LOP stays excluded since
+    it's unpaid/unlimited by design, matching "LOP has no limits").
     Provisions a zero-balance row on the fly for any type the employee has
     never touched yet, via the same get_or_create_for_year() used everywhere
-    else, so the dashboard shows "0 remaining" rather than omitting the type.
+    else, so the view shows "0 remaining" rather than omitting the type.
     """
     type_repo = LeaveTypeRepository(db)
-    policy_repo = LeavePolicyRepository(db)
     balance_repo = LeaveBalanceRepository(db)
 
     results: list[LeaveBalanceResponse] = []
     for leave_type in type_repo.list_active():
         if not leave_type.is_paid:
-            continue
-        policy = policy_repo.get_for_type_year(leave_type_id=leave_type.id, year=year)
-        if policy is None:
             continue
 
         balance = balance_repo.get_or_create_for_year(

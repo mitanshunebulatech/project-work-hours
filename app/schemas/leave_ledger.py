@@ -35,6 +35,25 @@ class LedgerAdjustmentCreate(BaseModel):
         return self
 
 
+class SetBalanceRequest(BaseModel):
+    """
+    HRMS V3: full manual override — admin sets an employee's balance for a
+    given leave type/year to an absolute number, rather than a signed delta
+    (that's what LedgerAdjustmentCreate is for). The delta against the
+    current balance is computed server-side (see
+    LeaveLedgerService.set_balance) rather than in the browser, to avoid a
+    stale-balance race between the admin loading the page and submitting —
+    the ledger stays the single source of truth either way; this is still
+    just one more row in it, tagged ADMIN_ADJUSTMENT.
+    """
+
+    employee_id: int
+    leave_type_id: int
+    year: int | None = Field(default=None, description="Defaults to current year if omitted")
+    target_days: Decimal = Field(decimal_places=2, ge=0, description="The absolute balance to set")
+    reason: str | None = Field(default=None, max_length=2000)
+
+
 class LeaveLedgerEntryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

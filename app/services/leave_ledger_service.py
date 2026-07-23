@@ -18,6 +18,8 @@ from app.schemas.leave_ledger import (
     LedgerAdjustmentResponse,
     LeaveBalanceResponse,
     LeaveLedgerEntryResponse,
+    LedgerTransactionType,
+    SetBalanceRequest,
 )
 
 
@@ -86,6 +88,63 @@ class LeaveLedgerService:
         return LedgerAdjustmentResponse(
             ledger_entry=LeaveLedgerEntryResponse.model_validate(created_entry),
             balance=LeaveBalanceResponse.model_validate(updated_balance),
+        )
+
+    def set_balance(
+        self, payload: SetBalanceRequest, *, actor_id: int, ip_address: str | None
+    ) -> LedgerAdjustmentResponse:
+        """
+        HRMS V3 Work Leave Balance: admin sets CL/SL/WFH to an absolute
+        number, any time. Reads the current balance, computes the signed
+        delta against target_days, and writes it through create_adjustment
+        — the exact same path every other balance-affecting write already
+        goes through (annual grant, leave debit, manual +/- adjustment), so
+        this never becomes a second, divergent way of touching a balance.
+        A target equal to the current balance is a legitimate no-op (e.g.
+        admin re-confirms a number without changing it) — not an error, but
+        create_adjustment() rejects a zero amount_days, so that case skips
+        the ledger write entirely and just returns the balance as-is.
+        """
+        employee = self.user_repo.get(payload.employee_id)
+        if employee is None or employee.deleted_at is not None:
+            raise NotFoundError("Employee not found")
+
+        leave_type = self.leave_type_repo.get(payload.leave_type_id)
+        if leave_type is None or not leave_type.is_active:
+            raise NotFoundError("Leave type not found or inactive")
+
+        year = payload.year or datetime.now(timezone.utc).year
+        current_balance = self.balance_repo.get_or_create_for_year(
+            employee_id=payload.employee_id, leave_type_id=payload.leave_type_id, year=year
+        )
+        delta = payload.target_days - current_balance.remaining_days
+
+        if delta == 0:
+            return LedgerAdjustmentResponse(
+                ledger_entry=LeaveLedgerEntryResponse(
+                    id=0,
+                    employee_id=payload.employee_id,
+                    leave_type_id=payload.leave_type_id,
+                    leave_request_id=None,
+                    transaction_type=LedgerTransactionType.ADMIN_ADJUSTMENT.value,
+                    amount_days=0,
+                    reason="No change — balance already at target",
+                    created_at=datetime.now(timezone.utc),
+                ),
+                balance=LeaveBalanceResponse.model_validate(current_balance),
+            )
+
+        return self.create_adjustment(
+            LedgerAdjustmentCreate(
+                employee_id=payload.employee_id,
+                leave_type_id=payload.leave_type_id,
+                year=year,
+                amount_days=delta,
+                transaction_type=LedgerTransactionType.ADMIN_ADJUSTMENT,
+                reason=payload.reason or f"Balance set to {payload.target_days} by admin",
+            ),
+            actor_id=actor_id,
+            ip_address=ip_address,
         )
 
     def list_for_employee(
