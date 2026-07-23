@@ -13,6 +13,7 @@ from app.schemas.leave_ledger import (
     LedgerAdjustmentCreate,
     LedgerAdjustmentResponse,
     LeaveLedgerEntryResponse,
+    SetBalanceRequest,
 )
 from app.services.annual_grant_service import AnnualGrantService
 from app.services.leave_ledger_service import LeaveLedgerService
@@ -28,6 +29,24 @@ def create_adjustment(
     current_user: User = Depends(require_permission("leave_ledger:manage")),
 ) -> LedgerAdjustmentResponse:
     return LeaveLedgerService(db).create_adjustment(
+        payload, actor_id=current_user.id, ip_address=get_client_ip(request)
+    )
+
+
+@router.post("/set-balance", response_model=LedgerAdjustmentResponse, status_code=201)
+def set_balance(
+    payload: SetBalanceRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_permission("leave_ledger:manage")),
+) -> LedgerAdjustmentResponse:
+    """
+    HRMS V3 Work Leave Balance tab: admin sets an employee's CL/SL/WFH
+    balance to an absolute value, any time — a full manual override, not a
+    +/- adjustment (that's still /adjustments above, kept for anything that
+    prefers a signed delta). Same permission gate, same underlying ledger.
+    """
+    return LeaveLedgerService(db).set_balance(
         payload, actor_id=current_user.id, ip_address=get_client_ip(request)
     )
 

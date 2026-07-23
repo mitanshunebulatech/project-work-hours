@@ -15,7 +15,12 @@ from app.services.leave_ledger_service import LeaveLedgerService
 class AnnualGrantService:
     """
     Grants every active employee their standard policy quota, for every active
-    leave type that has a policy for the given year. Leave types with no policy
+    leave type that has a policy for the given year AND has auto_grant_enabled
+    (HRMS V3: admin-input leave types like CL/SL now have their Work Leave
+    Balance set directly via LeaveLedgerService.set_balance() rather than an
+    annual grant — turning this flag off stops the automatic run without
+    deleting the policy row itself, since max_consecutive_days/carry_forward/
+    etc. still apply to manually-set balances too). Leave types with no policy
     row for that year (LOP, WFH — by design, per migration 0013's note) are
     silently skipped, no special-casing needed.
 
@@ -45,15 +50,13 @@ class AnnualGrantService:
         for leave_type in active_types:
             policy = self.leave_policy_repo.get_for_type_year(leave_type_id=leave_type.id, year=year)
             if policy is None:
-                # No policy for this type/year (e.g. LOP by design) — nothing to grant.
+                # No policy for this type/year (e.g. LOP, WFH by design) — nothing to grant.
                 continue
             if not policy.auto_grant_enabled:
-                # HRMS V3: admin-input leave types (CL/SL/Birthday) and
-                # separately-mechanized ones (WFH, monthly not annual) keep
-                # their policy row for max_consecutive_days/min_notice_days
-                # validation, but this flag is what actually stops
-                # AnnualGrantService from also granting them — without
-                # this check the column would exist but do nothing.
+                # HRMS V3: auto-grant deliberately disabled for this type (CL/SL/
+                # Birthday now go through admin-managed Work Leave Balance
+                # instead) — the policy row stays, its validation rules
+                # (max_consecutive_days etc.) still apply, just not this grant.
                 continue
 
             for employee in active_employees:
