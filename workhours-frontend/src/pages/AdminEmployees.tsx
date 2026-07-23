@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   getEmployees, createEmployeeProfile, updateEmployeeProfile, getDepartments, getUsers,
-  onboardEmployee, getRoles,
+  onboardEmployee, getRoles, getLeaveTypes, setLeaveBalance,
 } from '@/lib/api'
 import { useToast } from '@/hooks/useToast'
 import {
@@ -19,8 +19,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import {
   UserPlus, RefreshCw, Pencil, Users2, ChevronDown, UserCog, Copy, Check,
-  Mail, MailX, FileText, KeyRound,
+  Mail, MailX, FileText, KeyRound, Wallet, ArrowLeft, ArrowRight, AlertTriangle,
 } from 'lucide-react'
+
+const CURRENT_YEAR = new Date().getFullYear()
 
 const emptyOnboardForm = {
   first_name: '', last_name: '', email: '', personal_phone_number: '', emergency_phone_number: '',
@@ -43,15 +45,37 @@ export default function AdminEmployees() {
   const [loading, setLoading] = useState(true)
   const [departmentFilter, setDepartmentFilter] = useState<string>('all')
 
-  // Primary flow: onboard a brand-new employee (creates the User too)
+  // Primary flow: onboard a brand-new employee (creates the User too).
+  // 3-step wizard: 1) employee details  2) leave balance allotment
+  // 3) confirmation (temp password, shown once). The account itself is
+  // only created when Step 2 is confirmed — Step 1 is pure client-side
+  // form state until then, nothing is sent to the backend.
   const [showOnboard, setShowOnboard] = useState(false)
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1)
   const [onboardForm, setOnboardForm] = useState(emptyOnboardForm)
   const [onboardErrors, setOnboardErrors] = useState<any>({})
   const [onboarding, setOnboarding] = useState(false)
 
-  // One-time result modal — this is the ONLY place the temp password is
-  // ever shown, per EmployeeOnboardingResponse's contract.
+  // Step 2 — leave balance allotment. Keyed by leave_type_id -> string
+  // input (empty string = "don't set this one", left at whatever the
+  // ledger defaults to, i.e. 0). Only paid, active leave types are shown —
+  // LOP is unpaid/unlimited by design and never gets a balance row (same
+  // rule AdminWorkLeaveBalance.tsx and the backend's
+  // _balances_for_employee both already use).
+  const [leaveTypes, setLeaveTypes] = useState<any[]>([])
+  const [loadingLeaveTypes, setLoadingLeaveTypes] = useState(false)
+  const [balanceInputs, setBalanceInputs] = useState<Record<number, string>>({})
+  const [balanceErrors, setBalanceErrors] = useState<Record<number, string>>({})
+
+  // Step 3 — one-time result. This is the ONLY place the temp password is
+  // ever shown, per EmployeeOnboardingResponse's contract. balanceFailures
+  // covers the edge case where the account was created successfully but
+  // one or more set-balance calls afterward failed (e.g. a network blip
+  // mid-wizard) — the account exists either way, so we still show the
+  // credentials, just flag which balances need a manual follow-up via the
+  // Work Leave Balance tab.
   const [onboardResult, setOnboardResult] = useState<any>(null)
+  const [balanceFailures, setBalanceFailures] = useState<{ label: string; error: string }[]>([])
   const [copied, setCopied] = useState(false)
 
   // Secondary/legacy flow: attach a profile to an EXISTING user account,
@@ -87,12 +111,31 @@ export default function AdminEmployees() {
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { load(departmentFilter) }, [departmentFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Onboarding (primary) ---
+  // --- Onboarding (primary) — 3-step wizard ---
 
   const openOnboard = () => {
     setOnboardForm(emptyOnboardForm)
     setOnboardErrors({})
+    setBalanceInputs({})
+    setBalanceErrors({})
+    setBalanceFailures([])
+    setOnboardResult(null)
+    setWizardStep(1)
     setShowOnboard(true)
+  }
+
+  // Guards the dialog's close (X / Escape / overlay click) while a submit
+  // is in flight — closing mid-request would leave the wizard state
+  // out of sync with what the backend actually did.
+  const handleWizardOpenChange = (open: boolean) => {
+    if (!open) {
+      if (onboarding) return
+      setShowOnboard(false)
+      // If we'd already gotten to Step 3, the account is real — refresh
+      // the table so it shows up even if the admin closes via X/Escape
+      // instead of clicking "Done".
+      if (wizardStep === 3) load()
+    }
   }
 
   const validateOnboard = () => {
@@ -112,8 +155,48 @@ export default function AdminEmployees() {
     return Object.keys(e).length === 0
   }
 
-  const handleOnboardSubmit = async () => {
+  // Step 1 -> Step 2: validate details, load the paid leave types (once
+  // per wizard open) so Step 2 has something to render, then advance.
+  const handleNextFromStep1 = async () => {
     if (!validateOnboard()) return
+    if (leaveTypes.length === 0) {
+      setLoadingLeaveTypes(true)
+      try {
+        const res = await getLeaveTypes()
+        const paidTypes = res.data.filter((t: any) => t.is_paid)
+        setLeaveTypes(paidTypes)
+        setBalanceInputs(Object.fromEntries(paidTypes.map((t: any) => [t.id, ''])))
+      } catch {
+        toast('Failed to load leave types', 'error')
+        return
+      } finally {
+        setLoadingLeaveTypes(false)
+      }
+    }
+    setWizardStep(2)
+  }
+
+  const validateStep2 = () => {
+    const e: Record<number, string> = {}
+    for (const t of leaveTypes) {
+      const v = balanceInputs[t.id]
+      if (v === '' || v === undefined) continue
+      if (Number.isNaN(Number(v)) || Number(v) < 0) e[t.id] = 'Enter 0 or more'
+    }
+    setBalanceErrors(e)
+    return Object.keys(e).length === 0
+  }
+
+  // Step 2 -> Step 3: this is the real submit. Creates the account first
+  // (EmployeeOnboardingRequest), then sets whichever leave balances the
+  // admin entered against the returned user_id — NOT employee_profile_id;
+  // every leave_balances/leave_ledger row FKs employee_id to users.id, so
+  // employee_profile_id would silently write against the wrong row.
+  // Balance calls run via allSettled: one failing doesn't lose the others,
+  // and the account is already created either way, so we still advance to
+  // Step 3 and just flag whichever ones need a manual follow-up.
+  const handleConfirmStep2 = async () => {
+    if (!validateStep2()) return
     setOnboarding(true)
     try {
       const res = await onboardEmployee({
@@ -131,13 +214,40 @@ export default function AdminEmployees() {
         pan_number: onboardForm.pan_number ? onboardForm.pan_number.trim().toUpperCase() : null,
         role_id: Number(onboardForm.role_id),
       })
-      setShowOnboard(false)
+      const userId = res.data.user_id
+
+      const entries = leaveTypes.filter(t => balanceInputs[t.id] !== '' && balanceInputs[t.id] !== undefined)
+      const results = await Promise.allSettled(
+        entries.map(t => setLeaveBalance({
+          employee_id: userId,
+          leave_type_id: t.id,
+          year: CURRENT_YEAR,
+          target_days: Number(balanceInputs[t.id]),
+          reason: 'Initial allotment during onboarding',
+        }))
+      )
+      const failures = results
+        .map((r, i) => ({ r, t: entries[i] }))
+        .filter(({ r }) => r.status === 'rejected')
+        .map(({ r, t }) => ({
+          label: t.display_name,
+          error: errMsg((r as PromiseRejectedResult).reason, 'Failed to set balance'),
+        }))
+      setBalanceFailures(failures)
+
       setOnboardResult(res.data)
       setCopied(false)
+      setWizardStep(3)
       load()
     } catch (err: any) {
+      // onboardEmployee itself failed — nothing was created, stay on Step 2.
       toast(errMsg(err, 'Failed to onboard employee'), 'error')
     } finally { setOnboarding(false) }
+  }
+
+  const handleWizardDone = () => {
+    setShowOnboard(false)
+    load()
   }
 
   const handleCopyPassword = async () => {
@@ -322,112 +432,160 @@ export default function AdminEmployees() {
         </CardContent>
       </Card>
 
-      {/* Primary: Onboard a new employee */}
-      <Dialog open={showOnboard} onOpenChange={(open: boolean) => { if (!open) setShowOnboard(false) }}>
+      {/* Primary: Onboard a new employee — 3-step wizard */}
+      <Dialog open={showOnboard} onOpenChange={handleWizardOpenChange}>
         <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Onboard Employee</DialogTitle>
+            <DialogTitle>
+              {wizardStep === 1 && 'Onboard Employee — Details'}
+              {wizardStep === 2 && 'Onboard Employee — Leave Balance Allotment'}
+              {wizardStep === 3 && 'Employee Onboarded'}
+            </DialogTitle>
             <DialogDescription>
-              Creates a login account, generates a temporary password, assigns the role and
-              department, and creates their employee profile — all in one step.
+              {wizardStep === 1 && 'Step 1 of 3 — basic details, role, and department.'}
+              {wizardStep === 2 && "Step 2 of 3 — set the employee's starting leave balances. Leave any type blank to leave it at 0."}
+              {wizardStep === 3 && 'Step 3 of 3 — account created. Share these credentials with the employee.'}
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>First Name <span className="text-destructive">*</span></Label>
-                <Input value={onboardForm.first_name} onChange={e => setOnboardForm(f => ({ ...f, first_name: e.target.value }))} />
-                {onboardErrors.first_name && <p className="text-xs text-destructive">{onboardErrors.first_name}</p>}
+
+          {/* Step indicator */}
+          <div className="flex items-center gap-2 mb-4">
+            {[1, 2, 3].map(step => (
+              <div key={step} className="flex items-center gap-2 flex-1">
+                <div className={`h-1.5 flex-1 rounded-full ${wizardStep >= step ? 'bg-primary' : 'bg-muted'}`} />
               </div>
-              <div className="space-y-1.5">
-                <Label>Last Name <span className="text-destructive">*</span></Label>
-                <Input value={onboardForm.last_name} onChange={e => setOnboardForm(f => ({ ...f, last_name: e.target.value }))} />
-                {onboardErrors.last_name && <p className="text-xs text-destructive">{onboardErrors.last_name}</p>}
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Email <span className="text-destructive">*</span></Label>
-                <Input type="email" value={onboardForm.email} onChange={e => setOnboardForm(f => ({ ...f, email: e.target.value }))} />
-                {onboardErrors.email && <p className="text-xs text-destructive">{onboardErrors.email}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Role <span className="text-destructive">*</span></Label>
-                <Select value={onboardForm.role_id} onValueChange={v => setOnboardForm(f => ({ ...f, role_id: v }))}>
-                  <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
-                  <SelectContent>
-                    {roles.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-                {onboardErrors.role_id && <p className="text-xs text-destructive">{onboardErrors.role_id}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Department <span className="text-destructive">*</span></Label>
-                <Select value={onboardForm.department_id || 'none'} onValueChange={v => setOnboardForm(f => ({ ...f, department_id: v === 'none' ? '' : v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Select…</SelectItem>
-                    {departments.map(d => (
-                      <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {onboardErrors.department_id && <p className="text-xs text-destructive">{onboardErrors.department_id}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Designation <span className="text-destructive">*</span></Label>
-                <Input value={onboardForm.designation} onChange={e => setOnboardForm(f => ({ ...f, designation: e.target.value }))} />
-                {onboardErrors.designation && <p className="text-xs text-destructive">{onboardErrors.designation}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Years of Experience</Label>
-                <Input type="number" min="0" step="0.5" value={onboardForm.years_of_experience}
-                  onChange={e => setOnboardForm(f => ({ ...f, years_of_experience: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Personal Phone</Label>
-                <Input value={onboardForm.personal_phone_number} onChange={e => setOnboardForm(f => ({ ...f, personal_phone_number: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Emergency Phone</Label>
-                <Input value={onboardForm.emergency_phone_number} onChange={e => setOnboardForm(f => ({ ...f, emergency_phone_number: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Joining Date <span className="text-destructive">*</span></Label>
-                <Input type="date" value={onboardForm.joining_date} onChange={e => setOnboardForm(f => ({ ...f, joining_date: e.target.value }))} />
-                {onboardErrors.joining_date && <p className="text-xs text-destructive">{onboardErrors.joining_date}</p>}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Birth Date</Label>
-                <Input type="date" value={onboardForm.birth_date} onChange={e => setOnboardForm(f => ({ ...f, birth_date: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>Present Address</Label>
-                <Textarea rows={2} value={onboardForm.present_address} onChange={e => setOnboardForm(f => ({ ...f, present_address: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5 col-span-2">
-                <Label>PAN</Label>
-                <Input placeholder="AAAAA9999A" value={onboardForm.pan_number}
-                  onChange={e => setOnboardForm(f => ({ ...f, pan_number: e.target.value.toUpperCase() }))} />
-                {onboardErrors.pan_number && <p className="text-xs text-destructive">{onboardErrors.pan_number}</p>}
+            ))}
+          </div>
+
+          {/* --- Step 1: Employee details --- */}
+          {wizardStep === 1 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>First Name <span className="text-destructive">*</span></Label>
+                  <Input value={onboardForm.first_name} onChange={e => setOnboardForm(f => ({ ...f, first_name: e.target.value }))} />
+                  {onboardErrors.first_name && <p className="text-xs text-destructive">{onboardErrors.first_name}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Last Name <span className="text-destructive">*</span></Label>
+                  <Input value={onboardForm.last_name} onChange={e => setOnboardForm(f => ({ ...f, last_name: e.target.value }))} />
+                  {onboardErrors.last_name && <p className="text-xs text-destructive">{onboardErrors.last_name}</p>}
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Email <span className="text-destructive">*</span></Label>
+                  <Input type="email" value={onboardForm.email} onChange={e => setOnboardForm(f => ({ ...f, email: e.target.value }))} />
+                  {onboardErrors.email && <p className="text-xs text-destructive">{onboardErrors.email}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Role <span className="text-destructive">*</span></Label>
+                  <Select value={onboardForm.role_id} onValueChange={v => setOnboardForm(f => ({ ...f, role_id: v }))}>
+                    <SelectTrigger><SelectValue placeholder="Select…" /></SelectTrigger>
+                    <SelectContent>
+                      {roles.map(r => <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {onboardErrors.role_id && <p className="text-xs text-destructive">{onboardErrors.role_id}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Department <span className="text-destructive">*</span></Label>
+                  <Select value={onboardForm.department_id || 'none'} onValueChange={v => setOnboardForm(f => ({ ...f, department_id: v === 'none' ? '' : v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Select…</SelectItem>
+                      {departments.map(d => (
+                        <SelectItem key={d.id} value={String(d.id)}>{d.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {onboardErrors.department_id && <p className="text-xs text-destructive">{onboardErrors.department_id}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Designation <span className="text-destructive">*</span></Label>
+                  <Input value={onboardForm.designation} onChange={e => setOnboardForm(f => ({ ...f, designation: e.target.value }))} />
+                  {onboardErrors.designation && <p className="text-xs text-destructive">{onboardErrors.designation}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Years of Experience</Label>
+                  <Input type="number" min="0" step="0.5" value={onboardForm.years_of_experience}
+                    onChange={e => setOnboardForm(f => ({ ...f, years_of_experience: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Personal Phone</Label>
+                  <Input value={onboardForm.personal_phone_number} onChange={e => setOnboardForm(f => ({ ...f, personal_phone_number: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Emergency Phone</Label>
+                  <Input value={onboardForm.emergency_phone_number} onChange={e => setOnboardForm(f => ({ ...f, emergency_phone_number: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Joining Date <span className="text-destructive">*</span></Label>
+                  <Input type="date" value={onboardForm.joining_date} onChange={e => setOnboardForm(f => ({ ...f, joining_date: e.target.value }))} />
+                  {onboardErrors.joining_date && <p className="text-xs text-destructive">{onboardErrors.joining_date}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Birth Date</Label>
+                  <Input type="date" value={onboardForm.birth_date} onChange={e => setOnboardForm(f => ({ ...f, birth_date: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Present Address</Label>
+                  <Textarea rows={2} value={onboardForm.present_address} onChange={e => setOnboardForm(f => ({ ...f, present_address: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>PAN</Label>
+                  <Input placeholder="AAAAA9999A" value={onboardForm.pan_number}
+                    onChange={e => setOnboardForm(f => ({ ...f, pan_number: e.target.value.toUpperCase() }))} />
+                  {onboardErrors.pan_number && <p className="text-xs text-destructive">{onboardErrors.pan_number}</p>}
+                </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setShowOnboard(false)}>Cancel</Button>
-            <Button size="sm" onClick={handleOnboardSubmit} loading={onboarding}>Onboard Employee</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          )}
 
-      {/* One-time temp password result — this is the ONLY place it's ever shown */}
-      <Dialog open={!!onboardResult} onOpenChange={(open: boolean) => { if (!open) setOnboardResult(null) }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Check size={16} className="text-emerald-600" /> Employee Onboarded
-            </DialogTitle>
-          </DialogHeader>
-          {onboardResult && (
+          {/* --- Step 2: Leave balance allotment --- */}
+          {wizardStep === 2 && (
             <div className="space-y-4">
+              {loadingLeaveTypes ? (
+                <div className="py-8 text-center text-sm text-muted-foreground">Loading leave types…</div>
+              ) : (
+                <>
+                  <div className="rounded-lg border bg-muted/30 p-3 flex items-start gap-2">
+                    <Wallet size={14} className="text-muted-foreground mt-0.5 shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      Loss of Pay has no limit and isn't set here. Leave a field blank to start
+                      that balance at 0 — you can always adjust it later from Work Leave Balance.
+                    </p>
+                  </div>
+                  {leaveTypes.length === 0 ? (
+                    <p className="text-sm text-muted-foreground text-center py-4">No paid leave types configured.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {leaveTypes.map(t => (
+                        <div key={t.id} className="flex items-center justify-between gap-4">
+                          <Label className="flex-1">{t.display_name}</Label>
+                          <div className="w-32 space-y-1">
+                            <Input
+                              type="number" min="0" step="0.5" placeholder="0"
+                              value={balanceInputs[t.id] ?? ''}
+                              onChange={e => setBalanceInputs(prev => ({ ...prev, [t.id]: e.target.value }))}
+                            />
+                            {balanceErrors[t.id] && <p className="text-xs text-destructive">{balanceErrors[t.id]}</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+
+          {/* --- Step 3: Confirmation --- */}
+          {wizardStep === 3 && onboardResult && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Check size={16} className="text-emerald-600" />
+                <span className="text-foreground">Employee onboarded successfully</span>
+              </div>
+
               <div className="flex items-center gap-2 text-sm">
                 {onboardResult.email_sent ? (
                   <><Mail size={14} className="text-emerald-600" /> <span className="text-foreground">Welcome email sent to {onboardResult.email}</span></>
@@ -459,10 +617,46 @@ export default function AdminEmployees() {
                   required to set a new password on first login.
                 </p>
               </div>
+
+              {balanceFailures.length > 0 && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3">
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <AlertTriangle size={13} className="text-destructive" />
+                    <span className="text-xs font-medium text-foreground">
+                      Account created, but {balanceFailures.length === 1 ? 'a balance' : 'some balances'} couldn't be set
+                    </span>
+                  </div>
+                  <ul className="text-xs text-muted-foreground space-y-1">
+                    {balanceFailures.map((f, i) => <li key={i}>{f.label}: {f.error}</li>)}
+                  </ul>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Set these manually from the Work Leave Balance tab.
+                  </p>
+                </div>
+              )}
             </div>
           )}
+
           <DialogFooter>
-            <Button size="sm" onClick={() => setOnboardResult(null)}>Done</Button>
+            {wizardStep === 1 && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setShowOnboard(false)}>Cancel</Button>
+                <Button size="sm" onClick={handleNextFromStep1} loading={loadingLeaveTypes}>
+                  Next <ArrowRight size={14} />
+                </Button>
+              </>
+            )}
+            {wizardStep === 2 && (
+              <>
+                <Button variant="outline" size="sm" onClick={() => setWizardStep(1)} disabled={onboarding}>
+                  <ArrowLeft size={14} /> Back
+                </Button>
+                <Button size="sm" onClick={handleConfirmStep2} loading={onboarding}>Confirm &amp; Create Account</Button>
+              </>
+            )}
+            {wizardStep === 3 && (
+              <Button size="sm" onClick={handleWizardDone}>Done</Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
