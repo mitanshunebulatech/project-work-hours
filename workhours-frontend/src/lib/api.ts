@@ -218,6 +218,15 @@ export const exportLeaveRequestsCsv = (params?: object) =>
 export const getEmployeeLedger = (employeeId: number, params?: object) =>
   api.get(`/leave-ledger/${employeeId}`, { params })
 export const createLedgerAdjustment = (data: object) => api.post('/leave-ledger/adjustments', data)
+// HRMS V3 Work Leave Balance: sets an employee's leave type balance to an
+// absolute value (not a +/- delta — that's createLedgerAdjustment above).
+export const setLeaveBalance = (data: {
+  employee_id: number
+  leave_type_id: number
+  year?: number
+  target_days: number
+  reason?: string | null
+}) => api.post('/leave-ledger/set-balance', data)
 export const runAnnualGrant = (year: number) =>
   api.post('/leave-ledger/annual-grant/run', null, { params: { year } })
 
