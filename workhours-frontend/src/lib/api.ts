@@ -230,6 +230,9 @@ export const setLeaveBalance = (data: {
 export const runAnnualGrant = (year: number) =>
   api.post('/leave-ledger/annual-grant/run', null, { params: { year } })
 
+// --- Global search (⌘K command palette) ---
+export const search = (q: string) => api.get('/search', { params: { q } })
+
 // --- Notifications ---
 export const getMyNotifications = (params?: object) => api.get('/notifications/me', { params })
 export const getUnreadNotificationCount = () => api.get('/notifications/me/unread-count')
