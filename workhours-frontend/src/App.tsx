@@ -13,6 +13,7 @@ const Dashboard = lazy(() => import('@/pages/Dashboard'))
 const Timesheets = lazy(() => import('@/pages/Timesheets'))
 const Leave = lazy(() => import('@/pages/Leave'))
 const Profile = lazy(() => import('@/pages/Profile'))
+const Settings = lazy(() => import('@/pages/Settings'))
 const AdminTimesheets = lazy(() => import('@/pages/AdminTimesheets'))
 const AdminUsers = lazy(() => import('@/pages/AdminUsers'))
 const AdminRoles = lazy(() => import('@/pages/AdminRoles'))
@@ -91,6 +92,7 @@ function AppRoutes() {
                 <Route path="/leave" element={<Leave />} />
                 <Route path="/holidays" element={<HolidayCalendar />} />
                 <Route path="/profile" element={<Profile />} />
+                <Route path="/settings" element={<Settings />} />
                 <Route path="/admin/timesheets" element={<ProtectedRoute adminOnly><AdminTimesheets /></ProtectedRoute>} />
                 <Route path="/admin/leave" element={<ProtectedRoute adminOnly><AdminLeaveQueue /></ProtectedRoute>} />
                 <Route path="/admin/leave-balance" element={<ProtectedRoute adminOnly><AdminWorkLeaveBalance /></ProtectedRoute>} />

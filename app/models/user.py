@@ -29,6 +29,9 @@ class User(Base):
     role_id: Mapped[int | None] = mapped_column(ForeignKey("roles.id"), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     email_notifications_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Settings page: IANA timezone string (e.g. "Asia/Kolkata"), not a UTC
+    # offset — offsets don't account for DST and aren't stable identifiers.
+    timezone: Mapped[str] = mapped_column(String(50), nullable=False, default="UTC")
     # Forces a password reset on next login — set true for accounts created via
     # the Sprint 2 onboarding-email flow.
     must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
