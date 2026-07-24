@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import {
   getEmployees, createEmployeeProfile, updateEmployeeProfile, getDepartments, getUsers,
-  onboardEmployee, getRoles, getLeaveTypes, setLeaveBalance,
+  onboardEmployee, getRoles, getLeaveTypes, setLeaveBalance, getEmployeePicture,
 } from '@/lib/api'
 import { useToast } from '@/hooks/useToast'
 import {
@@ -34,6 +34,36 @@ const emptyLegacyForm = {
   user_id: '', full_name: '', department_id: '', date_of_birth: '', date_of_joining: '',
   phone_number: '', emergency_contact_phone: '', present_address: '', designation: '',
   years_of_experience: '', pan_number: '',
+}
+
+// Fetches and caches each employee's real profile picture at most once per
+// session — the table re-renders often (department filter, refresh button)
+// and the same picture would otherwise be re-fetched every time. Only ever
+// fetches for employees where profile_picture_path is truthy (from
+// getEmployees()'s EmployeeProfileResponse), so employees who never
+// uploaded a picture cost zero extra requests.
+const employeePictureCache = new Map<number, string>()
+
+function EmployeeAvatar({ profile }: { profile: any }) {
+  const [src, setSrc] = useState<string | null>(() => employeePictureCache.get(profile.id) || null)
+
+  useEffect(() => {
+    if (!profile.profile_picture_path || employeePictureCache.has(profile.id)) return
+    let cancelled = false
+    getEmployeePicture(profile.id)
+      .then(res => {
+        if (cancelled) return
+        const url = URL.createObjectURL(res.data)
+        employeePictureCache.set(profile.id, url)
+        setSrc(url)
+      })
+      .catch(() => {
+        // Path exists but isn't actually fetchable (e.g. stale record) — stay on initials.
+      })
+    return () => { cancelled = true }
+  }, [profile.id, profile.profile_picture_path])
+
+  return <UserAvatar name={profile.full_name} src={src} size={30} />
 }
 
 export default function AdminEmployees() {
@@ -403,7 +433,7 @@ export default function AdminEmployees() {
                     <tr key={p.id} className="border-b last:border-0 hover:bg-muted/40 transition-colors">
                       <td className="px-6 py-3.5">
                         <div className="flex items-center gap-3">
-                          <UserAvatar name={p.full_name} size={30} />
+                          <EmployeeAvatar profile={p} />
                           <span className="font-medium text-foreground">{p.full_name}</span>
                         </div>
                       </td>

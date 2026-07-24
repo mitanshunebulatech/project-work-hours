@@ -99,7 +99,7 @@ const PAGE_TITLES: Record<string, string> = {
 }
 
 export default function Layout({ children }: { children: ReactNode }) {
-  const { user, logout } = useAuth()
+  const { user, pictureUrl, logout } = useAuth()
   const { toast } = useToast()
   const { theme, toggle } = useTheme()
   const navigate = useNavigate()
@@ -166,8 +166,11 @@ export default function Layout({ children }: { children: ReactNode }) {
           collapsed ? 'w-[72px]' : 'w-64'
         )}
       >
-        {/* Logo */}
-        <div className={cn('flex items-center h-14 border-b border-sidebar-border', collapsed ? 'justify-center px-0' : 'gap-2.5 px-5')}>
+        {/* Logo — clicking returns to the dashboard, same as the topbar's "WorkHours" breadcrumb */}
+        <button
+          onClick={() => navigate('/dashboard')}
+          className={cn('flex items-center h-14 border-b border-sidebar-border w-full', collapsed ? 'justify-center px-0' : 'gap-2.5 px-5')}
+        >
           <div className="w-7 h-7 rounded-md bg-white flex items-center justify-center shrink-0 shadow-sm">
             <NebulaTechIcon size={20} />
           </div>
@@ -176,7 +179,7 @@ export default function Layout({ children }: { children: ReactNode }) {
               WorkHours
             </span>
           )}
-        </div>
+        </button>
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
@@ -278,20 +281,32 @@ export default function Layout({ children }: { children: ReactNode }) {
           {collapsed ? <ChevronRight size={15} /> : <><ChevronLeft size={15} /><span className="ml-1.5 text-xs">Collapse</span></>}
         </button>
 
-        {/* User footer */}
+        {/* User footer — clicking the avatar/name area opens Profile, same
+            destination as the topbar dropdown's Profile item. The Sign Out
+            button stays a separate control so it isn't triggered by the
+            same click. */}
         <div className={cn('border-t border-sidebar-border', collapsed ? 'px-2 py-3' : 'px-3 py-3')}>
           <div className={cn('flex items-center rounded-md', collapsed ? 'justify-center' : 'gap-3 px-1 py-1')}>
-            <UserAvatar name={user?.username} size={28} />
-            {!collapsed && (
-              <>
-                <div className="flex-1 min-w-0">
+            <button
+              onClick={() => navigate('/profile')}
+              title="View profile"
+              className={cn(
+                'flex items-center min-w-0 rounded-md hover:bg-white/5 transition-colors',
+                collapsed ? 'justify-center' : 'flex-1 gap-3 -mx-1 px-1 py-1'
+              )}
+            >
+              <UserAvatar name={user?.username} src={pictureUrl} size={28} />
+              {!collapsed && (
+                <div className="flex-1 min-w-0 text-left">
                   <p className="text-white text-xs font-medium truncate">{user?.username}</p>
                   <p className="text-slate-500 text-xs capitalize">{user?.role}</p>
                 </div>
-                <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors" title="Sign out">
-                  <LogOut size={15} />
-                </button>
-              </>
+              )}
+            </button>
+            {!collapsed && (
+              <button onClick={handleLogout} className="text-slate-500 hover:text-red-400 transition-colors shrink-0" title="Sign out">
+                <LogOut size={15} />
+              </button>
             )}
           </div>
         </div>
@@ -302,7 +317,9 @@ export default function Layout({ children }: { children: ReactNode }) {
         {/* Topbar */}
         <header className="sticky top-0 z-30 flex items-center gap-4 h-14 px-6 border-b border-border bg-background/80 backdrop-blur-md">
           <div className="flex items-center gap-1.5 text-sm min-w-0">
-            <span className="text-muted-foreground">WorkHours</span>
+            <button onClick={() => navigate('/dashboard')} className="text-muted-foreground hover:text-foreground transition-colors">
+              WorkHours
+            </button>
             <ChevronRight size={14} className="text-muted-foreground/50" />
             <span className="font-medium text-foreground truncate">{pageTitle}</span>
           </div>
@@ -333,7 +350,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
             <DropdownMenu>
               <DropdownMenuTrigger className="ml-1.5 flex items-center gap-2 rounded-md p-1 pr-2 hover:bg-muted transition-colors outline-none">
-                <UserAvatar name={user?.username} size={28} />
+                <UserAvatar name={user?.username} src={pictureUrl} size={28} />
                 <span className="hidden md:block text-sm font-medium text-foreground">{user?.username}</span>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
