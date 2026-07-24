@@ -1,7 +1,7 @@
 import { useState, FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { Eye, EyeOff, ShieldCheck, BarChart3, Zap } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import NebulaTechIcon from '@/components/NebulaTechIcon'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -44,30 +44,6 @@ export default function Login() {
             <NebulaTechIcon size={20} />
           </div>
           <span className="text-white font-display font-semibold text-base tracking-tight">WorkHours</span>
-        </div>
-
-        <div className="relative">
-          <p className="text-white font-display text-3xl font-semibold leading-tight mb-4">
-            Track time.<br />Stay <span className="text-gradient-brand">accountable.</span>
-          </p>
-          <p className="text-slate-300 text-sm leading-relaxed max-w-sm mb-8">
-            Enterprise-grade timesheet management for teams that care about accuracy, transparency and speed.
-          </p>
-
-          <div className="space-y-3">
-            {[
-              { icon: Zap, text: 'Log hours in seconds, not minutes' },
-              { icon: ShieldCheck, text: 'Full audit trail on every change' },
-              { icon: BarChart3, text: 'Real-time reporting across projects' },
-            ].map(({ icon: Icon, text }) => (
-              <div key={text} className="flex items-center gap-3 text-slate-300 text-sm">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/10 border border-white/10">
-                  <Icon size={13} className="text-nebula-300" />
-                </div>
-                {text}
-              </div>
-            ))}
-          </div>
         </div>
 
         <p className="relative text-slate-500 text-xs">© 2026 WorkHours · Nebula Tech</p>

@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input'
 import { UserAvatar } from '@/components/ui/avatar'
 import { EmptyState } from '@/components/ui/empty-state'
 import { UserCircle, Save, Camera, FileText, Trash2, Upload } from 'lucide-react'
+import { formatDate } from '@/lib/utils'
 
 const DOCUMENT_TYPES = [
   { value: 'PAN', label: 'PAN' },
@@ -251,7 +252,7 @@ export default function Profile() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">Date of Joining</p>
-                <p className="text-sm text-foreground">{profile?.date_of_joining || '—'}</p>
+                <p className="text-sm text-foreground">{profile?.date_of_joining ? formatDate(profile.date_of_joining) : '—'}</p>
               </div>
               <div>
                 <p className="text-xs text-muted-foreground mb-1">PAN</p>

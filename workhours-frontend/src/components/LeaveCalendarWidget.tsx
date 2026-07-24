@@ -192,7 +192,14 @@ export default function LeaveCalendarWidget({ compact = false }: { compact?: boo
             <div className="flex items-center gap-2 mb-2">
               <CalendarDays size={compact ? 12 : 14} className="text-muted-foreground" />
               <span className={cn('font-medium text-foreground', compact ? 'text-xs' : 'text-sm')}>
-                {new Date(selectedDay + 'T00:00:00').toLocaleDateString(undefined,
+                {/* Deliberately a richer, longer style than formatDate() elsewhere —
+                    this is a standalone section header for the selected day, not a
+                    table/list value, so more detail earns its place here. Locale is
+                    still pinned to 'en-IN' to match every other date in the app —
+                    it was previously `undefined` (browser-default locale), which
+                    could render differently depending on the visitor's OS/browser
+                    settings instead of consistently for everyone. */}
+                {new Date(selectedDay + 'T00:00:00').toLocaleDateString('en-IN',
                   compact ? { month: 'short', day: 'numeric' } : { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
               </span>
             </div>

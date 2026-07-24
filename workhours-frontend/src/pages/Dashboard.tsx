@@ -159,38 +159,12 @@ function AdminDashboard() {
         </Card>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Activities */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle>Recent Activities</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {summary.recent_activities.length === 0 ? (
-              <EmptyState icon={Inbox} title="No recent activity" />
-            ) : (
-              <div className="divide-y divide-border">
-                {summary.recent_activities.map((a: any, i: number) => (
-                  <div key={i} className="flex items-start gap-3 px-6 py-3">
-                    <div className="mt-0.5 p-1.5 rounded-md bg-muted text-muted-foreground">
-                      {a.activity_type === 'timesheet' ? <Clock size={13} /> : <Plane size={13} />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">{a.description}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {new Date(a.occurred_at).toLocaleString()}
-                      </p>
-                    </div>
-                    <Badge variant={statusVariant(a.status)} dot>{titleCase(a.status)}</Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Leave Calendar Widget — condensed list, reuses the summary endpoint's
-            month-scoped data rather than re-fetching the full calendar page's data */}
+      {/* Leave Calendar Widget — condensed list, reuses the summary endpoint's
+          month-scoped data rather than re-fetching the full calendar page's data.
+          Recent Activities (previously alongside this) was removed per PM
+          decision — this now gets its own row instead of sharing a 2-col grid
+          with an empty second slot. */}
+      <div className="max-w-2xl">
         <Card>
           <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
             <CardTitle>Leave Calendar — This Month</CardTitle>
