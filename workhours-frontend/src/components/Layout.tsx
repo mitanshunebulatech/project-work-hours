@@ -10,8 +10,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { features } from '@/lib/features'
-import { ReactNode, useState } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { UserAvatar } from '@/components/ui/avatar'
+import CommandPalette from './CommandPalette'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
   DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger
@@ -80,6 +81,18 @@ export default function Layout({ children }: { children: ReactNode }) {
   const location = useLocation()
   const isAdmin = user?.role === 'admin'
   const [collapsed, setCollapsed] = useState(false)
+  const [paletteOpen, setPaletteOpen] = useState(false)
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setPaletteOpen(open => !open)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   const handleLogout = async () => {
     await logout()
@@ -182,7 +195,7 @@ export default function Layout({ children }: { children: ReactNode }) {
 
           <button
             className="hidden sm:flex items-center gap-2 ml-2 h-8 px-3 rounded-md border border-input bg-muted/40 text-sm text-muted-foreground hover:border-primary/30 hover:text-foreground transition-colors w-64"
-            onClick={() => toast('Command palette coming soon', 'info')}
+            onClick={() => setPaletteOpen(true)}
           >
             <Search size={14} />
             <span className="flex-1 text-left">Search…</span>
@@ -190,6 +203,8 @@ export default function Layout({ children }: { children: ReactNode }) {
               <Command size={11} />K
             </span>
           </button>
+
+          <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} isAdmin={isAdmin} />
 
           <div className="ml-auto flex items-center gap-1.5">
             <button
