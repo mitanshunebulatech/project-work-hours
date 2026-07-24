@@ -4,7 +4,7 @@ import { useToast } from '@/hooks/useToast'
 import { useTheme } from '@/hooks/useTheme'
 import {
   Clock, LayoutDashboard, Users, FolderOpen,
-  BarChart3, Shield, LogOut, ChevronLeft, ChevronRight,
+  BarChart3, Shield, LogOut, ChevronLeft, ChevronRight, ChevronDown,
   Search, Moon, Sun, Settings, User as UserIcon, Command, Plane, CalendarCheck, CalendarDays,
   Building2, Users2, ShieldCheck, Wallet
 } from 'lucide-react'
@@ -29,7 +29,20 @@ interface NavItem {
   enabled?: boolean
 }
 
-const navItems: NavItem[] = [
+interface NavGroup {
+  label: string
+  icon: ReactNode
+  adminOnly?: boolean
+  children: NavItem[]
+}
+
+type NavEntry = NavItem | NavGroup
+
+function isNavGroup(entry: NavEntry): entry is NavGroup {
+  return 'children' in entry
+}
+
+const navItems: NavEntry[] = [
   { label: 'Dashboard', to: '/dashboard', icon: <LayoutDashboard size={18} /> },
   // employeeOnly, not just "no adminOnly flag": an admin account can still
   // technically be routed to /timesheets, but EntryService.create_entry now
@@ -40,9 +53,20 @@ const navItems: NavItem[] = [
   { label: 'Leave', to: '/leave', icon: <Plane size={18} /> },
   { label: 'Holidays', to: '/holidays', icon: <CalendarDays size={18} /> },
   { label: 'Timesheets', to: '/admin/timesheets', icon: <Clock size={18} />, adminOnly: true },
-  { label: 'Leave Approvals', to: '/admin/leave', icon: <CalendarCheck size={18} />, adminOnly: true },
-  { label: 'Work Leave Balance', to: '/admin/leave-balance', icon: <Wallet size={18} />, adminOnly: true },
-  { label: 'Leave Calendar', to: '/admin/leave-calendar', icon: <CalendarDays size={18} />, adminOnly: true },
+  // Stage 5 (sidebar reorg): the 3 admin Leave-related pages collapse into
+  // one group instead of sitting as 3 flat top-level items. Holiday Calendar
+  // stays a single top-level item since it's already one merged page
+  // (Calendar + Publisher merged in an earlier stage) — nothing left to group.
+  {
+    label: 'Leave',
+    icon: <Plane size={18} />,
+    adminOnly: true,
+    children: [
+      { label: 'Leave Approvals', to: '/admin/leave', icon: <CalendarCheck size={16} /> },
+      { label: 'Work Leave Balance', to: '/admin/leave-balance', icon: <Wallet size={16} /> },
+      { label: 'Leave Calendar', to: '/admin/leave-calendar', icon: <CalendarDays size={16} /> },
+    ],
+  },
   { label: 'Holiday Calendar', to: '/admin/holidays', icon: <CalendarDays size={18} />, adminOnly: true },
   { label: 'Roles', to: '/admin/roles', icon: <ShieldCheck size={18} />, adminOnly: true, enabled: features.adminRoles },
   { label: 'Departments', to: '/admin/departments', icon: <Building2 size={18} />, adminOnly: true },
@@ -84,6 +108,36 @@ export default function Layout({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
   const [paletteOpen, setPaletteOpen] = useState(false)
 
+  const passesFilter = (i: { adminOnly?: boolean; employeeOnly?: boolean; enabled?: boolean }) =>
+    i.enabled !== false && (!i.adminOnly || isAdmin) && (!i.employeeOnly || !isAdmin)
+
+  const visibleNav = navItems
+    .filter(passesFilter)
+    .map(entry => (isNavGroup(entry) ? { ...entry, children: entry.children.filter(passesFilter) } : entry))
+    .filter(entry => !isNavGroup(entry) || entry.children.length > 0)
+
+  // Auto-expand a group if the current route is one of its children — so
+  // deep-linking straight to e.g. /admin/leave-calendar doesn't leave the
+  // sidebar looking collapsed with no visual trace of where you are.
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => {
+    const initial = new Set<string>()
+    for (const entry of visibleNav) {
+      if (isNavGroup(entry) && entry.children.some(c => c.to === location.pathname)) {
+        initial.add(entry.label)
+      }
+    }
+    return initial
+  })
+
+  const toggleGroup = (label: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
+      return next
+    })
+  }
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -101,9 +155,6 @@ export default function Layout({ children }: { children: ReactNode }) {
     navigate('/login')
   }
 
-  const visibleNav = navItems.filter(
-    i => i.enabled !== false && (!i.adminOnly || isAdmin) && (!i.employeeOnly || !isAdmin)
-  )
   const pageTitle = PAGE_TITLES[location.pathname] || 'WorkHours'
 
   return (
@@ -129,32 +180,94 @@ export default function Layout({ children }: { children: ReactNode }) {
 
         {/* Nav */}
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto overflow-x-hidden">
-          {visibleNav.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              title={collapsed ? item.label : undefined}
-              className={({ isActive }) => cn(
-                'relative flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors group',
-                collapsed && 'justify-center px-0',
-                isActive
-                  ? 'bg-white/10 text-white'
-                  : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-              )}
-            >
-              {({ isActive }) => (
-                <>
-                  {isActive && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-nebula-400" />
+          {visibleNav.map(item => {
+            if (isNavGroup(item)) {
+              const isExpanded = expandedGroups.has(item.label)
+              const isChildActive = item.children.some(c => c.to === location.pathname)
+              return (
+                <div key={item.label}>
+                  <button
+                    onClick={() => {
+                      // Clicking a group while the sidebar is icon-only first
+                      // expands the whole sidebar — otherwise there'd be
+                      // nowhere to actually show the children that just opened.
+                      if (collapsed) setCollapsed(false)
+                      toggleGroup(item.label)
+                    }}
+                    title={collapsed ? item.label : undefined}
+                    className={cn(
+                      'w-full flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors group',
+                      collapsed && 'justify-center px-0',
+                      isChildActive
+                        ? 'text-white'
+                        : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                    )}
+                  >
+                    <span className={cn('shrink-0 transition-colors', isChildActive ? 'text-nebula-400' : 'text-slate-500 group-hover:text-slate-300')}>
+                      {item.icon}
+                    </span>
+                    {!collapsed && (
+                      <>
+                        <span className="truncate flex-1 text-left">{item.label}</span>
+                        <ChevronDown size={14} className={cn('shrink-0 transition-transform', isExpanded && 'rotate-180')} />
+                      </>
+                    )}
+                  </button>
+                  {!collapsed && isExpanded && (
+                    <div className="ml-3 pl-3 border-l border-white/10 space-y-0.5 mt-0.5">
+                      {item.children.map(child => (
+                        <NavLink
+                          key={child.to}
+                          to={child.to}
+                          className={({ isActive }) => cn(
+                            'relative flex items-center gap-2.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors group',
+                            isActive
+                              ? 'bg-white/10 text-white'
+                              : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                          )}
+                        >
+                          {({ isActive }) => (
+                            <>
+                              <span className={cn('shrink-0 transition-colors', isActive ? 'text-nebula-400' : 'text-slate-500 group-hover:text-slate-300')}>
+                                {child.icon}
+                              </span>
+                              <span className="truncate">{child.label}</span>
+                            </>
+                          )}
+                        </NavLink>
+                      ))}
+                    </div>
                   )}
-                  <span className={cn('shrink-0 transition-colors', isActive ? 'text-nebula-400' : 'text-slate-500 group-hover:text-slate-300')}>
-                    {item.icon}
-                  </span>
-                  {!collapsed && <span className="truncate">{item.label}</span>}
-                </>
-              )}
-            </NavLink>
-          ))}
+                </div>
+              )
+            }
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                title={collapsed ? item.label : undefined}
+                className={({ isActive }) => cn(
+                  'relative flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors group',
+                  collapsed && 'justify-center px-0',
+                  isActive
+                    ? 'bg-white/10 text-white'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+                )}
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <span className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-r-full bg-nebula-400" />
+                    )}
+                    <span className={cn('shrink-0 transition-colors', isActive ? 'text-nebula-400' : 'text-slate-500 group-hover:text-slate-300')}>
+                      {item.icon}
+                    </span>
+                    {!collapsed && <span className="truncate">{item.label}</span>}
+                  </>
+                )}
+              </NavLink>
+            )
+          })}
         </nav>
 
         {/* Collapse toggle */}
