@@ -27,6 +27,8 @@ from app.schemas.employee_profile import (
     MyProfileResponse,
 )
 from app.services.employee_profile_service import EmployeeProfileService
+from app.services.user_preferences_service import UserPreferencesService
+from app.schemas.user_preferences import UserPreferencesResponse, UserPreferencesUpdate
 from app.utils.file_storage import resolve_profile_picture_path
 
 router = APIRouter(prefix="/profile", tags=["Profile"])
@@ -63,6 +65,23 @@ def update_my_profile(
     # Re-fetch so the response reflects the freshly-committed row.
     profile = EmployeeProfileService(db).get_own_profile(current_user.id)
     return MyProfileResponse.build(current_user, profile)
+
+
+@router.get("/me/preferences", response_model=UserPreferencesResponse)
+def get_my_preferences(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserPreferencesResponse:
+    return UserPreferencesService(db).get_preferences(current_user)
+
+
+@router.patch("/me/preferences", response_model=UserPreferencesResponse)
+def update_my_preferences(
+    payload: UserPreferencesUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> UserPreferencesResponse:
+    return UserPreferencesService(db).update_preferences(current_user, payload)
 
 
 @router.post("/me/picture", response_model=MyProfileResponse)

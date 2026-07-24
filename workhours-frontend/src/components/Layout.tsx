@@ -59,6 +59,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/leave': 'Leave',
   '/holidays': 'Holidays',
   '/profile': 'My Profile',
+  '/settings': 'Settings',
   '/admin/timesheets': 'Timesheets',
   '/admin/leave': 'Leave Approvals',
   '/admin/leave-balance': 'Work Leave Balance',
@@ -231,7 +232,7 @@ export default function Layout({ children }: { children: ReactNode }) {
                 <DropdownMenuItem onClick={() => navigate('/profile')}>
                   <UserIcon size={14} /> Profile
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => toast('Settings coming soon', 'info')}>
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
                   <Settings size={14} /> Settings
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

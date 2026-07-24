@@ -66,6 +66,12 @@ export const logout = (refresh_token: string) =>
 export const changePassword = (current_password: string, new_password: string) =>
   api.post('/auth/change-password', { current_password, new_password })
 
+// Settings page — timezone + email notifications. Theme isn't here — it's
+// client-side only, see useTheme.tsx.
+export const getMyPreferences = () => api.get('/profile/me/preferences')
+export const updateMyPreferences = (data: { timezone?: string; email_notifications_enabled?: boolean }) =>
+  api.patch('/profile/me/preferences', data)
+
 // Profile
 export const getProfile = () => api.get('/profile/me')
 export const updateProfile = (data: {
